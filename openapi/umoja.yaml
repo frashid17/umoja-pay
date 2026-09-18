@@ -1,0 +1,202 @@
+openapi: 3.0.3
+info:
+  title: Umoja Pay Payments API
+  version: 1.0.0
+  description: |
+    East Africa payment aggregator API for Umoja Pay.
+    Authenticate with `Authorization: Bearer uk_test_…` or `uk_live_…`.
+    Amounts are in minor units (e.g. 1000 = 10.00 KES).
+
+    ## Sandbox testing
+    - Phone numbers ending in `0` fail; others succeed.
+    - Override with header `X-Umoja-Sandbox-Outcome: succeeded|failed`.
+servers:
+  - url: /api/v1
+    description: Current deployment
+tags:
+  - name: Payments
+paths:
+  /payments:
+    post:
+      tags: [Payments]
+      summary: Create a payment
+      operationId: createPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+          description: Prevents duplicate charges for the same key per merchant
+        - in: header
+          name: X-Umoja-Sandbox-Outcome
+          schema:
+            type: string
+            enum: [succeeded, failed]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+            example:
+              amount: 15000
+              currency: KES
+              method: mpesa_stk
+              phone: "254712345678"
+              reference: order_123
+              metadata:
+                order_id: "123"
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+    get:
+      tags: [Payments]
+      summary: List payments
+      operationId: listPayments
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - in: query
+          name: starting_after
+          schema:
+            type: string
+          description: Payment ID cursor
+      responses:
+        "200":
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Payment"
+                  has_more:
+                    type: boolean
+  /payments/{id}:
+    get:
+      tags: [Payments]
+      summary: Retrieve a payment
+      operationId: getPayment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "404":
+          $ref: "#/components/responses/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: API key `uk_test_…` or `uk_live_…`
+  schemas:
+    CreatePaymentRequest:
+      type: object
+      required: [amount, currency, phone]
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          enum: [KES, TZS, UGX, RWF]
+        method:
+          type: string
+          enum: [mpesa_stk]
+          default: mpesa_stk
+        phone:
+          type: string
+          description: MSISDN, e.g. 254712345678
+        reference:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        callback_url:
+          type: string
+          format: uri
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        amount:
+          type: integer
+        currency:
+          type: string
+        method:
+          type: string
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, succeeded, failed, canceled]
+        reference:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+        mode:
+          type: string
+          enum: [test, live]
+        provider_ref:
+          type: string
+          nullable: true
+        failure_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ErrorBody:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
