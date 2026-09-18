@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f3f5f4;
+  --foreground: #0d1512;
+  --muted: #5a6a62;
+  --card: #ffffff;
+  --border: #d5ddd8;
+  --accent: #0d6e56;
+  --accent-foreground: #f3fbf7;
+  --accent-soft: #d9eee6;
+  --danger: #c23128;
+  --warning: #a85a12;
+  --success: #0d6e56;
+  --ink: #071510;
+  --sand: #e8ebe0;
+  --signal: #f0a202;
+  --surface-elevated: #ffffff;
+  --ring: #0d6e56;
+  /* Logo mark — deep green reads on light surfaces */
+  --brand-mark-deep: #0b3d32;
+  --brand-mark-mint: #2db887;
+  --brand-mark-signal: #f0a202;
+}
+
+.dark {
+  --background: #070b09;
+  --foreground: #e7eee9;
+  --muted: #8fa399;
+  --card: #0f1613;
+  --border: #1e2b24;
+  --accent: #2db887;
+  --accent-foreground: #04140e;
+  --accent-soft: #123528;
+  --danger: #f07167;
+  --warning: #f5b041;
+  --success: #2db887;
+  --ink: #e7eee9;
+  --sand: #15201b;
+  --signal: #f0a202;
+  --surface-elevated: #121c17;
+  --ring: #2db887;
+  /* Logo mark — light left figure so it doesn’t vanish on dark UI */
+  --brand-mark-deep: #e8f5f0;
+  --brand-mark-mint: #2db887;
+  --brand-mark-signal: #f0a202;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-ink: var(--ink);
+  --color-sand: var(--sand);
+  --color-signal: var(--signal);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-plex);
+  --font-display: var(--font-syne);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: var(--font-display), system-ui, sans-serif;
+  letter-spacing: -0.03em;
+}
+
+.bg-atmosphere {
+  background:
+    radial-gradient(ellipse 70% 45% at 100% -5%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 55%),
+    radial-gradient(ellipse 50% 35% at 0% 20%, color-mix(in oklab, var(--signal) 10%, transparent), transparent 50%),
+    var(--background);
+}
+
+/* Hero plane — theme aware */
+.bg-hero {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 90% 10%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 0% 80%, color-mix(in oklab, var(--signal) 12%, transparent), transparent 50%),
+    linear-gradient(165deg, var(--background) 0%, color-mix(in oklab, var(--sand) 70%, var(--background)) 100%);
+}
+
+.dark .bg-hero {
+  background-color: #0a1612;
+  background-image: linear-gradient(165deg, #071410 0%, #0c1c16 55%, #0f241c 100%);
+}
+
+.bg-hero-grid {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(90deg, transparent, black 20%, black 80%, transparent);
+  opacity: 0.55;
+}
+
+.dark .bg-hero-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  opacity: 0.7;
+}
+
+.noise {
+  position: relative;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes draw-line {
+  from {
+    stroke-dashoffset: 240;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-up-delay {
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.animate-fade-up-delay-2 {
+  animation: fade-up 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
+}
+
+.animate-float {
+  animation: float-y 5.5s ease-in-out infinite;
+}
+
+.hero-stroke {
+  stroke-dasharray: 240;
+  animation: draw-line 1.4s ease-out 0.3s both;
+}
