@@ -8,8 +8,10 @@ info:
     Amounts are in minor units (e.g. 1000 = 10.00 KES).
 
     ## Sandbox testing
-    - Phone numbers ending in `0` fail; others succeed.
+    - M-Pesa: phone numbers ending in `0` fail; others succeed.
+    - Card: last4 `4000`/`0000` declines; otherwise succeeds (e.g. `4242`).
     - Override with header `X-Umoja-Sandbox-Outcome: succeeded|failed`.
+    - Hosted checkout: `/checkout/{session_id}` with merchant branding.
 servers:
   - url: /api/v1
     description: Current deployment
@@ -123,7 +125,7 @@ components:
   schemas:
     CreatePaymentRequest:
       type: object
-      required: [amount, currency, phone]
+      required: [amount, currency]
       properties:
         amount:
           type: integer
@@ -133,11 +135,16 @@ components:
           enum: [KES, TZS, UGX, RWF]
         method:
           type: string
-          enum: [mpesa_stk]
+          enum: [mpesa_stk, card]
           default: mpesa_stk
         phone:
           type: string
-          description: MSISDN, e.g. 254712345678
+          description: MSISDN required for mpesa_stk, e.g. 254712345678
+        card_last4:
+          type: string
+          minLength: 4
+          maxLength: 4
+          description: Last 4 digits for card API charges (prefer hosted checkout for full PAN)
         reference:
           type: string
         metadata:
