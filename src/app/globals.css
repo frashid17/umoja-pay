@@ -180,3 +180,109 @@ body {
   stroke-dasharray: 240;
   animation: draw-line 1.4s ease-out 0.3s both;
 }
+
+@keyframes checkout-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes checkout-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-checkout-fade {
+  animation: checkout-fade 0.4s ease both;
+}
+
+.animate-checkout-pop {
+  animation: checkout-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes checkout-swap {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-checkout-swap {
+  animation: checkout-swap 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes checkout-sheen {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(120%);
+  }
+}
+
+.animate-checkout-sheen {
+  animation: checkout-sheen 0.85s ease;
+}
+
+@keyframes checkout-pulse-glow {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.48;
+    transform: translateX(-50%) scale(1.04);
+  }
+}
+
+.checkout-glow {
+  animation: checkout-pulse-glow 7s ease-in-out infinite;
+}
+
+.checkout-grid {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 30%, black, transparent 75%);
+}
+
+.checkout-input {
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.checkout-input:focus {
+  border-color: color-mix(in oklab, var(--checkout-accent, var(--accent)) 70%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--checkout-accent, var(--accent)) 18%, transparent);
+}
+
+.checkout-card-face {
+  animation: checkout-swap 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.checkout-success-ring {
+  animation: checkout-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.checkout-pay-btn:enabled:active {
+  transform: scale(0.985);
+}
