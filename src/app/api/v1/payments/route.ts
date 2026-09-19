@@ -4,15 +4,30 @@ import { createPayment, listPayments } from "@/lib/payments/service";
 import { serializePayment } from "@/lib/payments/adapter";
 import type { NextResponse } from "next/server";
 
-const createSchema = z.object({
-  amount: z.number().int().positive(),
-  currency: z.enum(["KES", "TZS", "UGX", "RWF"]),
-  method: z.enum(["mpesa_stk"]).optional(),
-  phone: z.string().min(9).max(20),
-  reference: z.string().max(120).optional(),
-  metadata: z.record(z.unknown()).optional(),
-  callback_url: z.string().url().optional(),
-});
+const createSchema = z
+  .object({
+    amount: z.number().int().positive(),
+    currency: z.enum(["KES", "TZS", "UGX", "RWF"]),
+    method: z.enum(["mpesa_stk", "card"]).optional(),
+    phone: z.string().min(9).max(20).optional(),
+    card_last4: z.string().min(4).max(4).optional(),
+    reference: z.string().max(120).optional(),
+    metadata: z.record(z.unknown()).optional(),
+    callback_url: z.string().url().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const method = data.method ?? "mpesa_stk";
+    if (method === "mpesa_stk" && !data.phone) {
+      ctx.addIssue({ code: "custom", message: "phone is required for mpesa_stk", path: ["phone"] });
+    }
+    if (method === "card" && !data.card_last4) {
+      ctx.addIssue({
+        code: "custom",
+        message: "card_last4 is required for card (PCI: send last 4 only via API; use hosted checkout for full PAN)",
+        path: ["card_last4"],
+      });
+    }
+  });
 
 export async function POST(request: Request) {
   const auth = await authenticateApiKey(request);
@@ -46,6 +61,7 @@ export async function POST(request: Request) {
       currency: parsed.data.currency,
       method: parsed.data.method,
       phone: parsed.data.phone,
+      cardLast4: parsed.data.card_last4,
       reference: parsed.data.reference,
       metadata: {
         ...(parsed.data.metadata ?? {}),
