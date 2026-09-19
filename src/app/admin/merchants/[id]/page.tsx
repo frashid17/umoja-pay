@@ -1,6 +1,8 @@
 import { redirect, notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
+import { openAdminCheckoutPreview } from "@/app/dashboard/checkout/actions";
+import { merchantLogoPublicUrl } from "@/lib/checkout/sessions";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
 
@@ -18,6 +20,8 @@ export default async function AdminMerchantDetailPage({
 
   const { data: merchant } = await supabase.from("merchants").select("*").eq("id", id).maybeSingle();
   if (!merchant) notFound();
+
+  const logoUrl = merchantLogoPublicUrl(merchant.logo_path);
 
   const [{ count: keyCount }, { data: payments }, { data: kyc }] = await Promise.all([
     supabase
@@ -41,11 +45,32 @@ export default async function AdminMerchantDetailPage({
 
   return (
     <AppShell variant="admin" title={merchant.name} subtitle={`Merchant ${merchant.id}`}>
-      <div className="mb-6 flex flex-wrap gap-3 text-sm">
+      <div className="mb-6 flex flex-wrap items-center gap-3 text-sm">
         <StatusBadge status={merchant.status} />
         <span className="text-muted">Country {merchant.country}</span>
         <span className="text-muted">{keyCount ?? 0} active keys</span>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoUrl}
+            alt=""
+            className="h-8 w-8 rounded-md border border-border bg-card object-contain p-0.5"
+          />
+        ) : null}
       </div>
+
+      <form action={openAdminCheckoutPreview} className="mb-8">
+        <input type="hidden" name="merchantId" value={merchant.id} />
+        <button
+          type="submit"
+          className="rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground"
+        >
+          Preview their checkout
+        </button>
+        <p className="mt-2 text-xs text-muted">
+          Opens a preview session with this merchant’s logo and branding — no charge.
+        </p>
+      </form>
 
       <h2 className="font-display text-xl">KYC</h2>
       <ul className="mt-3 space-y-2 text-sm">
@@ -57,34 +82,29 @@ export default async function AdminMerchantDetailPage({
       </ul>
 
       <h2 className="mt-10 font-display text-xl">Recent payments</h2>
-      <div className="mt-3 overflow-hidden rounded-lg border border-border">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-card text-muted">
-            <tr>
-              <th className="px-3 py-2">Amount</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Phone</th>
-              <th className="px-3 py-2">Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(payments ?? []).map((p) => (
-              <tr key={p.id} className="border-t border-border">
-                <td className="px-3 py-2">
-                  {(p.amount / 100).toFixed(2)} {p.currency}
-                </td>
-                <td className="px-3 py-2">
-                  <StatusBadge status={p.status} />
-                </td>
-                <td className="px-3 py-2">{p.phone}</td>
-                <td className="px-3 py-2 text-muted">
-                  {new Date(p.created_at).toLocaleString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {(payments ?? []).length === 0 ? (
+        <p className="mt-3 text-sm text-muted">No payments yet.</p>
+      ) : (
+        <ul className="mt-3 space-y-3">
+          {(payments ?? []).map((p) => (
+            <li key={p.id} className="rounded-xl border border-border bg-card px-4 py-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-foreground">
+                    {(p.amount / 100).toFixed(2)} {p.currency}
+                  </p>
+                  <p className="mt-1 text-xs capitalize text-muted">
+                    {p.method.replace("_", " ")}
+                    {p.phone ? ` · ${p.phone}` : ""}
+                  </p>
+                </div>
+                <StatusBadge status={p.status} />
+              </div>
+              <p className="mt-2 text-xs text-muted">{new Date(p.created_at).toLocaleString()}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </AppShell>
   );
 }
