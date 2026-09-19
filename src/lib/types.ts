@@ -3,10 +3,11 @@ export type MemberRole = "owner" | "developer";
 export type KycStatus = "draft" | "pending" | "approved" | "rejected";
 export type ApiKeyMode = "test" | "live";
 export type PaymentStatus = "pending" | "processing" | "succeeded" | "failed" | "canceled";
-export type PaymentMethod = "mpesa_stk";
+export type PaymentMethod = "mpesa_stk" | "card";
 export type CurrencyCode = "KES" | "TZS" | "UGX" | "RWF";
 export type CountryCode = "KE" | "TZ" | "UG" | "RW";
 export type SettlementStatus = "pending" | "processing" | "paid" | "failed";
+export type CheckoutSessionStatus = "open" | "completed" | "expired" | "canceled";
 
 export type Merchant = {
   id: string;
@@ -18,6 +19,8 @@ export type Merchant = {
   support_email: string | null;
   support_phone?: string | null;
   statement_email?: string | null;
+  logo_path?: string | null;
+  brand_accent?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -78,7 +81,7 @@ export type Payment = {
   amount: number;
   currency: CurrencyCode;
   method: PaymentMethod;
-  phone: string;
+  phone: string | null;
   status: PaymentStatus;
   mode: ApiKeyMode;
   reference: string | null;
@@ -86,6 +89,26 @@ export type Payment = {
   provider_ref: string | null;
   failure_reason: string | null;
   idempotency_key: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CheckoutSession = {
+  id: string;
+  merchant_id: string;
+  amount: number;
+  currency: CurrencyCode;
+  description: string | null;
+  reference: string | null;
+  status: CheckoutSessionStatus;
+  mode: ApiKeyMode;
+  is_preview: boolean;
+  payment_id: string | null;
+  success_url: string | null;
+  cancel_url: string | null;
+  metadata: Record<string, unknown>;
+  expires_at: string;
+  completed_at: string | null;
   created_at: string;
   updated_at: string;
 };
