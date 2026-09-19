@@ -1,10 +1,8 @@
 import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
-import { SandboxMpesaAdapter, serializePayment } from "@/lib/payments/adapter";
+import { getAdapterForMethod, serializePayment } from "@/lib/payments/adapter";
 import { dispatchPaymentWebhook } from "@/lib/webhooks";
 import type { ApiKeyMode, CurrencyCode, Payment, PaymentMethod } from "@/lib/types";
-
-const adapter = new SandboxMpesaAdapter();
 
 export type CreatePaymentInput = {
   merchantId: string;
@@ -12,7 +10,8 @@ export type CreatePaymentInput = {
   amount: number;
   currency: CurrencyCode;
   method?: PaymentMethod;
-  phone: string;
+  phone?: string | null;
+  cardLast4?: string;
   reference?: string;
   metadata?: Record<string, unknown>;
   idempotencyKey?: string | null;
@@ -22,6 +21,14 @@ export type CreatePaymentInput = {
 
 export async function createPayment(input: CreatePaymentInput) {
   const supabase = createServiceClient();
+  const method: PaymentMethod = input.method ?? "mpesa_stk";
+
+  if (method === "mpesa_stk" && !input.phone?.trim()) {
+    throw new Error("Phone is required for M-Pesa STK payments");
+  }
+  if (method === "card" && !input.cardLast4?.trim() && !input.sandboxOutcome) {
+    throw new Error("Card details are required for card payments");
+  }
 
   if (input.idempotencyKey) {
     const { data: existing } = await supabase
@@ -36,18 +43,25 @@ export async function createPayment(input: CreatePaymentInput) {
     }
   }
 
+  const metadata = {
+    ...(input.metadata ?? {}),
+    ...(method === "card" && input.cardLast4
+      ? { card_last4: input.cardLast4.replace(/\D/g, "").slice(-4) }
+      : {}),
+  };
+
   const { data: inserted, error } = await supabase
     .from("payments")
     .insert({
       merchant_id: input.merchantId,
       amount: input.amount,
       currency: input.currency,
-      method: input.method ?? "mpesa_stk",
-      phone: input.phone,
+      method,
+      phone: method === "mpesa_stk" ? input.phone : null,
       status: "processing",
       mode: input.mode,
       reference: input.reference ?? null,
-      metadata: input.metadata ?? {},
+      metadata,
       idempotency_key: input.idempotencyKey ?? null,
     })
     .select("*")
@@ -67,12 +81,15 @@ export async function createPayment(input: CreatePaymentInput) {
   }
 
   const payment = inserted as Payment;
+  const adapter = getAdapterForMethod(method);
 
   const result = await adapter.initiate({
     paymentId: payment.id,
     amount: payment.amount,
     currency: payment.currency,
+    method,
     phone: payment.phone,
+    cardLast4: input.cardLast4,
     sandboxOutcome: input.mode === "test" ? input.sandboxOutcome : undefined,
   });
 
@@ -101,11 +118,11 @@ export async function createPayment(input: CreatePaymentInput) {
       mode: finalPayment.mode,
       amount: finalPayment.amount,
       currency: finalPayment.currency,
+      method: finalPayment.method,
       api_key_id: input.actorKeyId,
     },
   });
 
-  // Fire-and-forget webhook
   void dispatchPaymentWebhook(finalPayment);
 
   return { payment: finalPayment, created: true };
