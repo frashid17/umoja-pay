@@ -10,12 +10,23 @@ type NavLink = {
   href: string;
   label: string;
   exact?: boolean;
-  icon: "overview" | "sandbox" | "kyc" | "keys" | "payments" | "settlements" | "webhooks" | "settings" | "merchants";
+  icon:
+    | "overview"
+    | "sandbox"
+    | "kyc"
+    | "keys"
+    | "payments"
+    | "settlements"
+    | "webhooks"
+    | "settings"
+    | "merchants"
+    | "checkout";
 };
 
 const merchantLinks: NavLink[] = [
   { href: "/dashboard", label: "Overview", exact: true, icon: "overview" },
   { href: "/dashboard/sandbox", label: "Sandbox", icon: "sandbox" },
+  { href: "/dashboard/checkout", label: "Checkout", icon: "checkout" },
   { href: "/dashboard/kyc", label: "KYC", icon: "kyc" },
   { href: "/dashboard/keys", label: "API keys", icon: "keys" },
   { href: "/dashboard/payments", label: "Payments", icon: "payments" },
@@ -83,6 +94,13 @@ function NavIcon({ name, className }: { name: NavLink["icon"]; className?: strin
         <svg {...common}>
           <path {...stroke} d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v9A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-9Z" />
           <path {...stroke} d="M4 10h16" />
+        </svg>
+      );
+    case "checkout":
+      return (
+        <svg {...common}>
+          <path {...stroke} d="M6 7h12l-1 12H7L6 7Z" />
+          <path {...stroke} d="M9 7V5.5A3 3 0 0 1 15 5.5V7" />
         </svg>
       );
     case "settlements":
