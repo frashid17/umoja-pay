@@ -1,10 +1,12 @@
-import type { Payment, PaymentStatus } from "@/lib/types";
+import type { Payment, PaymentMethod, PaymentStatus } from "@/lib/types";
 
 export type InitiatePaymentInput = {
   paymentId: string;
   amount: number;
   currency: string;
-  phone: string;
+  method: PaymentMethod;
+  phone?: string | null;
+  cardLast4?: string;
   sandboxOutcome?: "succeeded" | "failed";
 };
 
@@ -25,15 +27,15 @@ export class SandboxMpesaAdapter implements PaymentProviderAdapter {
   async initiate(input: InitiatePaymentInput): Promise<InitiatePaymentResult> {
     const providerRef = `sandbox_stk_${input.paymentId.slice(0, 8)}`;
     let outcome = input.sandboxOutcome;
+    const phone = input.phone ?? "";
 
     if (!outcome) {
-      const last = input.phone.replace(/\D/g, "").slice(-1);
+      const last = phone.replace(/\D/g, "").slice(-1);
       if (last === "0") outcome = "failed";
       else outcome = "succeeded";
     }
 
-    // Simulate STK push latency
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((resolve) => setTimeout(resolve, 450));
 
     if (outcome === "failed") {
       return {
@@ -48,6 +50,42 @@ export class SandboxMpesaAdapter implements PaymentProviderAdapter {
       status: "succeeded",
     };
   }
+}
+
+export class SandboxCardAdapter implements PaymentProviderAdapter {
+  name = "sandbox_card";
+
+  async initiate(input: InitiatePaymentInput): Promise<InitiatePaymentResult> {
+    const providerRef = `sandbox_card_${input.paymentId.slice(0, 8)}`;
+    let outcome = input.sandboxOutcome;
+    const last4 = (input.cardLast4 ?? "").replace(/\D/g, "").slice(-4);
+
+    if (!outcome) {
+      // Stripe-like test: 4242 succeeds, 4000 fails
+      if (last4 === "4000" || last4 === "0000") outcome = "failed";
+      else outcome = "succeeded";
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    if (outcome === "failed") {
+      return {
+        providerRef,
+        status: "failed",
+        failureReason: "Sandbox: card was declined",
+      };
+    }
+
+    return {
+      providerRef,
+      status: "succeeded",
+    };
+  }
+}
+
+export function getAdapterForMethod(method: PaymentMethod): PaymentProviderAdapter {
+  if (method === "card") return new SandboxCardAdapter();
+  return new SandboxMpesaAdapter();
 }
 
 export function serializePayment(payment: Payment) {
