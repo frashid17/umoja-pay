@@ -2,11 +2,13 @@
 
 ## Shipped (MVP)
 
-- Next.js App Router + Supabase Auth / Postgres / Storage / RLS
+- Next.js App Router + Clerk Auth / Supabase Postgres / Storage / RLS
 - Merchant signup, business create, KYC submit + document upload
 - API key generate / revoke (hashed secrets, test + live gating)
 - Public Payments API: create, get, list + idempotency + light rate limit
-- Sandbox M-Pesa STK adapter (phone suffix / header outcome)
+- Sandbox M-Pesa STK + sandbox card adapters
+- Hosted Checkout (`/checkout/[id]`) with merchant logo, brand accent, MoMo + card
+- Merchant Checkout dashboard (branding, preview, test links) + admin checkout preview
 - Signed webhooks (single retry) + audit logs
 - OpenAPI docs at `/docs`
 - Platform admin: overview, merchants, KYC queue, payments
@@ -15,17 +17,18 @@
 ## Next
 
 1. **Live Safaricom Daraja** — implement `DarajaMpesaAdapter` behind the same interface; store short-code / passkey per merchant.
-2. **Refunds** — `POST /api/v1/refunds` + dashboard UI.
-3. **Payouts / settlements** — dashboard settlements page + settlement destination in settings shipped; automate batch creation and bank/MM rails next.
-4. **Hosted Checkout** — redirect / embed page so merchants avoid collecting phones in their own UI if preferred.
-5. **Customer objects** — reusable payers, saved MSISDNs.
-6. **Webhook delivery queue** — durable retries with backoff and delivery logs.
-7. **SDKs** — Node and Python thin clients generated from OpenAPI.
-8. **Compliance** — production KYC vendor integration, transaction monitoring hooks, PCI minimization (mobile-money-first).
+2. **Live card acquiring** — replace sandbox card with a PCI-compliant processor (tokens only; never store PAN).
+3. **Refunds** — `POST /api/v1/refunds` + dashboard UI.
+4. **Payouts / settlements** — automate batch creation and bank/MM rails.
+5. **Checkout API** — `POST /api/v1/checkout/sessions` for programmatic hosted payment links.
+6. **Customer objects** — reusable payers, saved MSISDNs.
+7. **Webhook delivery queue** — durable retries with backoff and delivery logs.
+8. **SDKs** — Node and Python thin clients generated from OpenAPI.
+9. **Compliance** — production KYC vendor integration, transaction monitoring hooks.
 
 ## Ops checklist
 
-- Create Supabase project; run `supabase/migrations/001_init.sql` then `002_clerk_user_ids.sql` and `003_settlements.sql`
+- Create Supabase project; run migrations `001` → `004_checkout.sql`
 - Set env from `.env.example`
 - Add your email to `PLATFORM_ADMIN_EMAILS`
-- Confirm Storage bucket `kyc` is private
+- Confirm Storage buckets: `kyc` (private), `merchant-logos` (public)
