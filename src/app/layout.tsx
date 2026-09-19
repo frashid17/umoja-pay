@@ -19,7 +19,7 @@ const syne = Syne({
 export const metadata: Metadata = {
   title: "Umoja Pay — Payments for East Africa",
   description:
-    "Accept M-Pesa and East African payments with Umoja Pay. Integrate once, onboard with KYC, and ship with sandbox API keys.",
+    "Accept M-Pesa, cards, and East African payments with Umoja Pay. Hosted checkout, KYC, and sandbox API keys.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
