@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { completeCheckoutAction } from "@/app/checkout/actions";
+import { completeCheckoutAction, pollCheckoutPaymentAction } from "@/app/checkout/actions";
 import {
   cvcLength,
   detectCardBrand,
@@ -34,10 +34,11 @@ type Props = {
   session: CheckoutSession;
   merchant: MerchantBrand;
   preview?: boolean;
+  paystackEnabled?: boolean;
 };
 
 type PayMethod = "mpesa_stk" | "card";
-type Phase = "form" | "processing" | "success" | "error";
+type Phase = "form" | "processing" | "awaiting" | "success" | "error";
 
 function formatMoney(amount: number, currency: CurrencyCode) {
   return `${(amount / 100).toLocaleString(undefined, {
@@ -88,21 +89,24 @@ function useMaskedDigits(value: string, revealMs = 700) {
   return display;
 }
 
-export function CheckoutClient({ session, merchant, preview }: Props) {
+export function CheckoutClient({ session, merchant, preview, paystackEnabled }: Props) {
   const accent = merchant.brandAccent?.trim() || "var(--accent)";
   const [method, setMethod] = useState<PayMethod>("mpesa_stk");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [cardName, setCardName] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvc, setCvc] = useState("");
   const [phase, setPhase] = useState<Phase>("form");
+  const [awaitMessage, setAwaitMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [entered, setEntered] = useState(false);
   const [fieldsKey, setFieldsKey] = useState(0);
   const [pending, startTransition] = useTransition();
   const cvcDisplay = useMaskedDigits(cvc);
+  const pollRef = useRef<number | null>(null);
 
   const brand = detectCardBrand(cardNumber);
   const maxCvc = cvcLength(brand);
@@ -117,9 +121,80 @@ export function CheckoutClient({ session, merchant, preview }: Props) {
     setFieldsKey((k) => k + 1);
   }, [method]);
 
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+    };
+  }, []);
+
   function switchMethod(next: PayMethod) {
-    if (next === method || pending || phase === "processing") return;
+    if (next === method || pending || phase === "processing" || phase === "awaiting") return;
     setMethod(next);
+  }
+
+  function startPolling(id: string) {
+    if (pollRef.current) window.clearInterval(pollRef.current);
+    pollRef.current = window.setInterval(() => {
+      void (async () => {
+        const res = await pollCheckoutPaymentAction(id);
+        if (res.status === "succeeded") {
+          if (pollRef.current) window.clearInterval(pollRef.current);
+          setPhase("success");
+        } else if (res.status === "failed") {
+          if (pollRef.current) window.clearInterval(pollRef.current);
+          setError(res.failureReason ?? "Payment failed");
+          setPhase("error");
+        }
+      })();
+    }, 2500);
+  }
+
+  async function openPaystackPopup(opts: {
+    publicKey: string;
+    email: string;
+    amount: number;
+    currency: string;
+    ref: string;
+    accessCode?: string;
+  }) {
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector("script[data-paystack]");
+      if (existing) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://js.paystack.co/v1/inline.js";
+      script.async = true;
+      script.dataset.paystack = "1";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Could not load Paystack"));
+      document.body.appendChild(script);
+    });
+
+    type PaystackPop = {
+      setup: (cfg: Record<string, unknown>) => { openIframe: () => void };
+    };
+    const PaystackPop = (window as unknown as { PaystackPop?: PaystackPop }).PaystackPop;
+    if (!PaystackPop) throw new Error("Paystack unavailable");
+
+    await new Promise<void>((resolve, reject) => {
+      const handler = PaystackPop.setup({
+        key: opts.publicKey,
+        email: opts.email,
+        amount: opts.amount,
+        currency: opts.currency,
+        ref: opts.ref,
+        ...(opts.accessCode ? { access_code: opts.accessCode } : {}),
+        callback: () => {
+          resolve();
+        },
+        onClose: () => {
+          reject(new Error("Payment window closed"));
+        },
+      });
+      handler.openIframe();
+    });
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -139,8 +214,9 @@ export function CheckoutClient({ session, merchant, preview }: Props) {
     const fd = new FormData();
     fd.set("sessionId", session.id);
     fd.set("method", method);
+    if (email) fd.set("email", email);
     if (method === "mpesa_stk") fd.set("phone", phone);
-    if (method === "card") {
+    if (method === "card" && !paystackEnabled) {
       fd.set("cardName", cardName);
       fd.set("cardNumber", cardNumber.replace(/\s/g, ""));
       fd.set("expiry", expiry);
@@ -154,12 +230,55 @@ export function CheckoutClient({ session, merchant, preview }: Props) {
         setPhase("error");
         return;
       }
+
       setPaymentId(result.paymentId);
+
+      if (result.status === "succeeded") {
+        setPhase("success");
+        return;
+      }
+
+      if (method === "card" && paystackEnabled && result.publicKey) {
+        try {
+          if (result.authorizationUrl && !result.accessCode) {
+            window.location.href = result.authorizationUrl;
+            return;
+          }
+          await openPaystackPopup({
+            publicKey: result.publicKey,
+            email: email,
+            amount: session.amount,
+            currency: session.currency,
+            ref: result.paymentId,
+            accessCode: result.accessCode,
+          });
+          setAwaitMessage("Confirming your card payment…");
+          setPhase("awaiting");
+          startPolling(result.paymentId);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Card payment cancelled");
+          setPhase("error");
+        }
+        return;
+      }
+
+      if (result.status === "processing") {
+        setAwaitMessage(
+          result.displayText ||
+            (method === "mpesa_stk"
+              ? "Check your phone and enter your M-Pesa PIN."
+              : "Complete payment to continue."),
+        );
+        setPhase("awaiting");
+        startPolling(result.paymentId);
+        return;
+      }
+
       setPhase("success");
     });
   }
 
-  const busy = pending || phase === "processing";
+  const busy = pending || phase === "processing" || phase === "awaiting";
 
   return (
     <div
@@ -260,6 +379,24 @@ export function CheckoutClient({ session, merchant, preview }: Props) {
                 </div>
 
                 <div key={fieldsKey} className="animate-checkout-swap flex flex-col gap-2.5">
+                  {(method === "card" && paystackEnabled) || method === "mpesa_stk" ? (
+                    <label className="block space-y-1 text-sm">
+                      <span className="text-[12px] font-medium text-foreground">
+                        Email {method === "card" && paystackEnabled ? "" : "(optional)"}
+                      </span>
+                      <input
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        type="email"
+                        required={Boolean(method === "card" && paystackEnabled)}
+                        disabled={busy}
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        className="checkout-input w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none"
+                      />
+                    </label>
+                  ) : null}
+
                   {method === "mpesa_stk" ? (
                     <label className="block space-y-1 text-sm">
                       <span className="text-[12px] font-medium text-foreground">Phone</span>
@@ -277,7 +414,17 @@ export function CheckoutClient({ session, merchant, preview }: Props) {
                           className="checkout-input w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-3 font-mono text-sm outline-none"
                         />
                       </div>
+                      {paystackEnabled ? (
+                        <span className="text-[11px] text-muted">
+                          You’ll get an M-Pesa STK prompt on this number (Paystack).
+                        </span>
+                      ) : null}
                     </label>
+                  ) : paystackEnabled ? (
+                    <p className="rounded-lg border border-border bg-sand/40 px-3 py-2.5 text-[12px] text-muted">
+                      Card details are entered securely on Paystack — we never see your full card
+                      number.
+                    </p>
                   ) : (
                     <>
                       <div
@@ -415,7 +562,7 @@ export function CheckoutClient({ session, merchant, preview }: Props) {
                 </button>
                 <p className="flex items-center justify-center gap-1 text-[10px] text-muted">
                   <ShieldIcon className="h-3 w-3" />
-                  Encrypted · powered by{" "}
+                  Encrypted · {paystackEnabled ? "Paystack · " : ""}powered by{" "}
                   <Link
                     href="/"
                     className="font-medium text-foreground underline-offset-2 hover:underline"
@@ -425,6 +572,21 @@ export function CheckoutClient({ session, merchant, preview }: Props) {
                 </p>
               </form>
             </>
+          ) : null}
+
+          {phase === "awaiting" ? (
+            <div className="flex flex-col items-center px-5 py-8 text-center animate-checkout-pop">
+              <span className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-[color:var(--checkout-accent)]" />
+              <h2 className="font-display mt-4 text-xl font-bold text-foreground">
+                Waiting for payment
+              </h2>
+              <p className="mt-1.5 max-w-xs text-sm text-muted">
+                {awaitMessage ?? "Complete authorization on your phone or card window."}
+              </p>
+              {paymentId ? (
+                <p className="mt-2 font-mono text-[10px] text-muted">{paymentId}</p>
+              ) : null}
+            </div>
           ) : null}
 
           {phase === "success" ? (
