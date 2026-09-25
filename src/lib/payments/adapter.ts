@@ -1,4 +1,6 @@
-import type { Payment, PaymentMethod, PaymentStatus } from "@/lib/types";
+import type { ApiKeyMode, Payment, PaymentMethod, PaymentStatus } from "@/lib/types";
+import { isPaystackConfigured } from "@/lib/paystack/client";
+import { PaystackAdapter } from "@/lib/payments/paystack-adapter";
 
 export type InitiatePaymentInput = {
   paymentId: string;
@@ -7,6 +9,9 @@ export type InitiatePaymentInput = {
   method: PaymentMethod;
   phone?: string | null;
   cardLast4?: string;
+  email?: string;
+  callbackUrl?: string;
+  metadata?: Record<string, unknown>;
   sandboxOutcome?: "succeeded" | "failed";
 };
 
@@ -14,6 +19,10 @@ export type InitiatePaymentResult = {
   providerRef: string;
   status: Extract<PaymentStatus, "processing" | "succeeded" | "failed">;
   failureReason?: string;
+  accessCode?: string;
+  authorizationUrl?: string;
+  displayText?: string;
+  publicKey?: string | null;
 };
 
 export type RefundPaymentInput = {
@@ -139,7 +148,13 @@ export class SandboxCardAdapter implements PaymentProviderAdapter {
   }
 }
 
-export function getAdapterForMethod(method: PaymentMethod): PaymentProviderAdapter {
+export function getAdapterForMethod(
+  method: PaymentMethod,
+  mode: ApiKeyMode = "test",
+): PaymentProviderAdapter {
+  if (isPaystackConfigured(mode)) {
+    return new PaystackAdapter(mode);
+  }
   if (method === "card") return new SandboxCardAdapter();
   return new SandboxMpesaAdapter();
 }
