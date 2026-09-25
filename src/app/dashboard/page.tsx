@@ -165,6 +165,39 @@ export default async function DashboardPage() {
       <section className="mt-10 grid gap-4 sm:grid-cols-3">
         {[
           {
+            label: "Balances",
+            value: "Live & test",
+            detail: "Available funds by currency",
+            href: "/dashboard/balances",
+          },
+          {
+            label: "Transactions",
+            value: String(paymentCount ?? 0),
+            detail: `${succeededCount ?? 0} succeeded · ${failedCount ?? 0} failed`,
+            href: "/dashboard/transactions",
+          },
+          {
+            label: "Customers",
+            value: "Payers",
+            detail: "Who paid on your platform",
+            href: "/dashboard/customers",
+          },
+        ].map((item) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className="rounded-2xl border border-border bg-card px-5 py-4 transition hover:border-accent/40"
+          >
+            <p className="text-[11px] uppercase tracking-[0.14em] text-muted">{item.label}</p>
+            <p className="font-display mt-2 text-2xl font-bold text-foreground">{item.value}</p>
+            <p className="mt-1 truncate text-xs text-muted">{item.detail}</p>
+          </Link>
+        ))}
+      </section>
+
+      <section className="mt-4 grid gap-4 sm:grid-cols-3">
+        {[
+          {
             label: "API keys",
             value: String(keyCount ?? 0),
             detail:
