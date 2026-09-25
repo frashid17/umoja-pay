@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
 import { getSessionUser, getUserMerchant, isPlatformAdmin } from "@/lib/auth/session";
+import { getAppOrigin } from "@/lib/app-url";
 import { createCheckoutSession } from "@/lib/checkout/sessions";
 import type { CurrencyCode } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
@@ -129,7 +130,7 @@ export async function createDemoCheckoutAction(
       metadata: { created_from: "merchant_dashboard" },
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = await getAppOrigin();
     return { url: `${appUrl}/checkout/${session.id}` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not create checkout" };
