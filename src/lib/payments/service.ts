@@ -175,13 +175,14 @@ export async function applyProviderPaymentStatus(input: {
   channel?: string | null;
 }) {
   const supabase = createServiceClient();
-  let { data: payment, error } = await supabase
+  const { data: paymentById, error } = await supabase
     .from("payments")
     .select("*")
     .eq("id", input.reference)
     .maybeSingle();
 
   if (error) throw error;
+  let payment = paymentById;
   if (!payment) {
     const byRef = await supabase
       .from("payments")
