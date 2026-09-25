@@ -14,22 +14,23 @@
 - OpenAPI docs at `/docs`
 - Platform admin: overview, merchants, KYC queue, payments
 - Merchant settings (profile, settlement destination, team) + settlements dashboard
+- Merchant balances, transactions ledger, and customers (payers from payments)
+- Refunds (full/partial) via dashboard + `POST /api/v1/refunds`; settles to original MoMo/card; merchant can edit reason/amount
 
 ## Next
 
 1. **Live Safaricom Daraja** — implement `DarajaMpesaAdapter` behind the same interface; store short-code / passkey per merchant.
 2. **Live card acquiring** — replace sandbox card with a PCI-compliant processor (tokens only; never store PAN).
-3. **Refunds** — `POST /api/v1/refunds` + dashboard UI.
-4. **Payouts / settlements** — automate batch creation and bank/MM rails.
-5. **Checkout API** — `POST /api/v1/checkout/sessions` for programmatic hosted payment links.
-6. **Customer objects** — reusable payers, saved MSISDNs.
-7. **Webhook delivery queue** — durable retries with backoff and delivery logs.
-8. **SDKs** — Node and Python thin clients generated from OpenAPI.
-9. **Compliance** — production KYC vendor integration, transaction monitoring hooks.
+3. **Payouts / settlements** — automate batch creation and bank/MM rails.
+4. **Checkout API** — `POST /api/v1/checkout/sessions` for programmatic hosted payment links.
+5. **Customer objects** — reusable payers, saved MSISDNs.
+6. **Webhook delivery queue** — durable retries with backoff and delivery logs.
+7. **SDKs** — Node and Python thin clients generated from OpenAPI.
+8. **Compliance** — production KYC vendor integration, transaction monitoring hooks.
 
 ## Ops checklist
 
-- Create Supabase project; run migrations `001` → `005_payment_links.sql`
+- Create Supabase project; run migrations `001` → `006_refunds.sql`
 - Set env from `.env.example`
 - Add your email to `PLATFORM_ADMIN_EMAILS`
 - Confirm Storage buckets: `kyc` (private), `merchant-logos` (public), `payment-link-images` (public)
