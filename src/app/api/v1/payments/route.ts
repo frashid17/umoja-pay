@@ -2,6 +2,7 @@ import { z } from "zod";
 import { authenticateApiKey, apiError, rateLimit } from "@/lib/api/auth";
 import { createPayment, listPayments } from "@/lib/payments/service";
 import { serializePayment } from "@/lib/payments/adapter";
+import { isPaystackConfigured } from "@/lib/paystack/client";
 import type { NextResponse } from "next/server";
 
 const createSchema = z
@@ -10,6 +11,7 @@ const createSchema = z
     currency: z.enum(["KES", "TZS", "UGX", "RWF"]),
     method: z.enum(["mpesa_stk", "card"]).optional(),
     phone: z.string().min(9).max(20).optional(),
+    email: z.string().email().optional(),
     card_last4: z.string().min(4).max(4).optional(),
     reference: z.string().max(120).optional(),
     metadata: z.record(z.unknown()).optional(),
@@ -19,13 +21,6 @@ const createSchema = z
     const method = data.method ?? "mpesa_stk";
     if (method === "mpesa_stk" && !data.phone) {
       ctx.addIssue({ code: "custom", message: "phone is required for mpesa_stk", path: ["phone"] });
-    }
-    if (method === "card" && !data.card_last4) {
-      ctx.addIssue({
-        code: "custom",
-        message: "card_last4 is required for card (PCI: send last 4 only via API; use hosted checkout for full PAN)",
-        path: ["card_last4"],
-      });
     }
   });
 
@@ -49,30 +44,56 @@ export async function POST(request: Request) {
     return apiError(400, "invalid_request", parsed.error.issues[0]?.message ?? "Invalid body");
   }
 
+  const method = parsed.data.method ?? "mpesa_stk";
+  const usingPaystack = isPaystackConfigured(auth.mode);
+
+  if (method === "card" && usingPaystack && !parsed.data.email) {
+    return apiError(400, "invalid_request", "email is required for Paystack card payments");
+  }
+  if (method === "card" && !usingPaystack && !parsed.data.card_last4) {
+    return apiError(
+      400,
+      "invalid_request",
+      "card_last4 is required for sandbox card (or configure Paystack)",
+    );
+  }
+
   const sandboxHeader = request.headers.get("x-umoja-sandbox-outcome");
   const sandboxOutcome =
     sandboxHeader === "succeeded" || sandboxHeader === "failed" ? sandboxHeader : undefined;
 
   try {
-    const { payment, created } = await createPayment({
-      merchantId: auth.merchant.id,
-      mode: auth.mode,
-      amount: parsed.data.amount,
-      currency: parsed.data.currency,
-      method: parsed.data.method,
-      phone: parsed.data.phone,
-      cardLast4: parsed.data.card_last4,
-      reference: parsed.data.reference,
-      metadata: {
-        ...(parsed.data.metadata ?? {}),
-        ...(parsed.data.callback_url ? { callback_url: parsed.data.callback_url } : {}),
-      },
-      idempotencyKey: request.headers.get("idempotency-key"),
-      sandboxOutcome,
-      actorKeyId: auth.apiKey.id,
-    });
+    const { payment, created, accessCode, authorizationUrl, displayText, publicKey } =
+      await createPayment({
+        merchantId: auth.merchant.id,
+        mode: auth.mode,
+        amount: parsed.data.amount,
+        currency: parsed.data.currency,
+        method: parsed.data.method,
+        phone: parsed.data.phone,
+        email: parsed.data.email,
+        cardLast4: parsed.data.card_last4,
+        reference: parsed.data.reference,
+        callbackUrl: parsed.data.callback_url,
+        metadata: {
+          ...(parsed.data.metadata ?? {}),
+          ...(parsed.data.callback_url ? { callback_url: parsed.data.callback_url } : {}),
+        },
+        idempotencyKey: request.headers.get("idempotency-key"),
+        sandboxOutcome,
+        actorKeyId: auth.apiKey.id,
+      });
 
-    return Response.json(serializePayment(payment), { status: created ? 201 : 200 });
+    return Response.json(
+      {
+        ...serializePayment(payment),
+        ...(displayText ? { display_text: displayText } : {}),
+        ...(accessCode ? { access_code: accessCode } : {}),
+        ...(authorizationUrl ? { authorization_url: authorizationUrl } : {}),
+        ...(publicKey ? { public_key: publicKey } : {}),
+      },
+      { status: created ? 201 : 200 },
+    );
   } catch (e) {
     return apiError(500, "payment_failed", e instanceof Error ? e.message : "Failed");
   }
