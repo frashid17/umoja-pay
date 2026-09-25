@@ -7,6 +7,7 @@ import {
   getMerchantForCheckout,
   merchantLogoPublicUrl,
 } from "@/lib/checkout/sessions";
+import { isPaystackConfigured } from "@/lib/paystack/client";
 
 export default async function CheckoutPage({
   params,
@@ -71,5 +72,12 @@ export default async function CheckoutPage({
     );
   }
 
-  return <CheckoutClient session={live} merchant={brand} preview={live.is_preview} />;
+  return (
+    <CheckoutClient
+      session={live}
+      merchant={brand}
+      preview={live.is_preview}
+      paystackEnabled={isPaystackConfigured(live.mode)}
+    />
+  );
 }
