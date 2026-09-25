@@ -13,6 +13,8 @@ const styles: Record<string, string> = {
   suspended: "bg-danger/15 text-danger ring-1 ring-danger/25",
   processing: "bg-accent-soft text-accent ring-1 ring-accent/25",
   canceled: "bg-border/60 text-muted ring-1 ring-border",
+  partially_refunded: "bg-warning/15 text-warning ring-1 ring-warning/25",
+  refunded: "bg-border/60 text-muted ring-1 ring-border",
 };
 
 export function StatusBadge({
