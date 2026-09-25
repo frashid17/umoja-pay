@@ -100,6 +100,21 @@ export function PaymentLinksDashboard({
             </select>
           </label>
           <label className="block space-y-1.5 text-sm sm:col-span-2">
+            <span className="text-foreground">Mode</span>
+            <select name="mode" defaultValue="test" className={inputClass}>
+              <option value="test">Test — sandbox payments, no live money</option>
+              <option value="live" disabled={merchant.status !== "active"}>
+                Live — real charges
+                {merchant.status !== "active" ? " (requires active KYC)" : ""}
+              </option>
+            </select>
+            {merchant.status !== "active" ? (
+              <span className="block text-xs text-muted">
+                Complete KYC and get approved before creating live payment links.
+              </span>
+            ) : null}
+          </label>
+          <label className="block space-y-1.5 text-sm sm:col-span-2">
             <span className="text-foreground">Product image (optional)</span>
             <input
               name="image"
@@ -142,7 +157,7 @@ export function PaymentLinksDashboard({
                     >
                       <p className="truncate font-medium text-foreground">{link.product_name}</p>
                       <p className="mt-0.5 text-xs text-muted">
-                        {formatLinkMoney(link.amount, link.currency)} · {link.status}
+                        {formatLinkMoney(link.amount, link.currency)} · {link.mode} · {link.status}
                       </p>
                     </button>
                   </li>
@@ -156,6 +171,13 @@ export function PaymentLinksDashboard({
           <h2 className="font-display text-xl font-bold text-foreground">Share & download</h2>
           {selected && selected.status === "active" ? (
             <div className="mt-5 space-y-4">
+              <p className="text-sm text-muted">
+                Mode:{" "}
+                <span className="font-medium capitalize text-foreground">{selected.mode}</span>
+                {selected.mode === "test"
+                  ? " — sandbox only"
+                  : " — live charges"}
+              </p>
               <PaymentLinkShareCard
                 payUrl={selected.payUrl || `${appOrigin}/pay/${selected.slug}?checkout=1`}
                 merchantName={merchant.name}
