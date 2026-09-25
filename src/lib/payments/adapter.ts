@@ -16,9 +16,28 @@ export type InitiatePaymentResult = {
   failureReason?: string;
 };
 
+export type RefundPaymentInput = {
+  refundId: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  method: PaymentMethod;
+  phone?: string | null;
+  cardLast4?: string | null;
+  originalProviderRef?: string | null;
+  sandboxOutcome?: "succeeded" | "failed";
+};
+
+export type RefundPaymentResult = {
+  providerRef: string;
+  status: Extract<PaymentStatus, "processing" | "succeeded" | "failed">;
+  failureReason?: string;
+};
+
 export interface PaymentProviderAdapter {
   name: string;
   initiate(input: InitiatePaymentInput): Promise<InitiatePaymentResult>;
+  refund(input: RefundPaymentInput): Promise<RefundPaymentResult>;
 }
 
 export class SandboxMpesaAdapter implements PaymentProviderAdapter {
@@ -50,6 +69,25 @@ export class SandboxMpesaAdapter implements PaymentProviderAdapter {
       status: "succeeded",
     };
   }
+
+  async refund(input: RefundPaymentInput): Promise<RefundPaymentResult> {
+    const providerRef = `sandbox_refund_mm_${input.refundId.slice(0, 8)}`;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    if (input.sandboxOutcome === "failed") {
+      return {
+        providerRef,
+        status: "failed",
+        failureReason: "Sandbox: mobile money refund failed",
+      };
+    }
+
+    // Settles back to the customer's MSISDN used on the original charge
+    return {
+      providerRef,
+      status: "succeeded",
+    };
+  }
 }
 
 export class SandboxCardAdapter implements PaymentProviderAdapter {
@@ -61,7 +99,6 @@ export class SandboxCardAdapter implements PaymentProviderAdapter {
     const last4 = (input.cardLast4 ?? "").replace(/\D/g, "").slice(-4);
 
     if (!outcome) {
-      // Stripe-like test: 4242 succeeds, 4000 fails
       if (last4 === "4000" || last4 === "0000") outcome = "failed";
       else outcome = "succeeded";
     }
@@ -76,6 +113,25 @@ export class SandboxCardAdapter implements PaymentProviderAdapter {
       };
     }
 
+    return {
+      providerRef,
+      status: "succeeded",
+    };
+  }
+
+  async refund(input: RefundPaymentInput): Promise<RefundPaymentResult> {
+    const providerRef = `sandbox_refund_card_${input.refundId.slice(0, 8)}`;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    if (input.sandboxOutcome === "failed") {
+      return {
+        providerRef,
+        status: "failed",
+        failureReason: "Sandbox: card refund failed",
+      };
+    }
+
+    // Settles back to the card that was charged
     return {
       providerRef,
       status: "succeeded",
