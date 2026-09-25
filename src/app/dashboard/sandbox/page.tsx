@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { SandboxConsole } from "@/app/dashboard/sandbox/sandbox-console";
+import { getAppOrigin } from "@/lib/app-url";
 import { createServiceClient } from "@/lib/supabase/admin";
 import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
 
@@ -21,7 +22,7 @@ export default async function SandboxPage() {
     .order("created_at", { ascending: false })
     .limit(8);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = await getAppOrigin();
 
   return (
     <AppShell
