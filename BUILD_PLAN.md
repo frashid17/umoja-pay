@@ -9,6 +9,7 @@
 - Sandbox M-Pesa STK + sandbox card adapters
 - Hosted Checkout (`/checkout/[id]`) with merchant logo, brand accent, MoMo + card
 - Merchant Checkout dashboard (branding, preview, test links) + admin checkout preview
+- Payment links (`/dashboard/payment-links`, `/pay/[slug]`) with product image, QR, PNG/PDF flyer, powered-by footer
 - Signed webhooks (single retry) + audit logs
 - OpenAPI docs at `/docs`
 - Platform admin: overview, merchants, KYC queue, payments
@@ -28,7 +29,7 @@
 
 ## Ops checklist
 
-- Create Supabase project; run migrations `001` → `004_checkout.sql`
+- Create Supabase project; run migrations `001` → `005_payment_links.sql`
 - Set env from `.env.example`
 - Add your email to `PLATFORM_ADMIN_EMAILS`
-- Confirm Storage buckets: `kyc` (private), `merchant-logos` (public)
+- Confirm Storage buckets: `kyc` (private), `merchant-logos` (public), `payment-link-images` (public)
