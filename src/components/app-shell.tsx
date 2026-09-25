@@ -20,13 +20,15 @@ type NavLink = {
     | "webhooks"
     | "settings"
     | "merchants"
-    | "checkout";
+    | "checkout"
+    | "links";
 };
 
 const merchantLinks: NavLink[] = [
   { href: "/dashboard", label: "Overview", exact: true, icon: "overview" },
   { href: "/dashboard/sandbox", label: "Sandbox", icon: "sandbox" },
   { href: "/dashboard/checkout", label: "Checkout", icon: "checkout" },
+  { href: "/dashboard/payment-links", label: "Payment links", icon: "links" },
   { href: "/dashboard/kyc", label: "KYC", icon: "kyc" },
   { href: "/dashboard/keys", label: "API keys", icon: "keys" },
   { href: "/dashboard/payments", label: "Payments", icon: "payments" },
@@ -101,6 +103,13 @@ function NavIcon({ name, className }: { name: NavLink["icon"]; className?: strin
         <svg {...common}>
           <path {...stroke} d="M6 7h12l-1 12H7L6 7Z" />
           <path {...stroke} d="M9 7V5.5A3 3 0 0 1 15 5.5V7" />
+        </svg>
+      );
+    case "links":
+      return (
+        <svg {...common}>
+          <path {...stroke} d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5.93" />
+          <path {...stroke} d="M14 11a5 5 0 0 0-7.07 0L5.5 12.43a5 5 0 0 0 7.07 7.07L14 18.07" />
         </svg>
       );
     case "settlements":
