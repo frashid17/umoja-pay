@@ -122,7 +122,7 @@ export async function createRefund(input: CreateRefundInput) {
   if (insertErr) throw insertErr;
   const refund = inserted as Refund;
 
-  const adapter = getAdapterForMethod(payment.method);
+  const adapter = getAdapterForMethod(payment.method, payment.mode);
   const cardLast4 =
     typeof payment.metadata?.card_last4 === "string" ? payment.metadata.card_last4 : null;
 
