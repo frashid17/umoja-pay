@@ -41,6 +41,12 @@ export async function createPaymentLinkAction(
   const currency = String(formData.get("currency") ?? "KES") as CurrencyCode;
   if (!CURRENCIES.includes(currency)) return { error: "Invalid currency" };
 
+  const modeRaw = String(formData.get("mode") ?? "test");
+  const mode = modeRaw === "live" ? "live" : "test";
+  if (mode === "live" && ctx.merchant.status !== "active") {
+    return { error: "Live payment links require an active merchant (complete KYC first)" };
+  }
+
   const supabase = createServiceClient();
   let imagePath: string | null = null;
 
@@ -68,7 +74,7 @@ export async function createPaymentLinkAction(
       amount,
       currency,
       imagePath,
-      mode: "test",
+      mode,
     });
 
     await writeAuditLog({
@@ -77,7 +83,7 @@ export async function createPaymentLinkAction(
       action: "payment_link.created",
       entityType: "payment_link",
       entityId: link.id,
-      metadata: { slug: link.slug, amount, currency },
+      metadata: { slug: link.slug, amount, currency, mode },
     });
 
     revalidatePath("/dashboard/payment-links");
