@@ -16,6 +16,10 @@ type NavLink = {
     | "kyc"
     | "keys"
     | "payments"
+    | "balances"
+    | "transactions"
+    | "customers"
+    | "refunds"
     | "settlements"
     | "webhooks"
     | "settings"
@@ -26,6 +30,10 @@ type NavLink = {
 
 const merchantLinks: NavLink[] = [
   { href: "/dashboard", label: "Overview", exact: true, icon: "overview" },
+  { href: "/dashboard/balances", label: "Balances", icon: "balances" },
+  { href: "/dashboard/transactions", label: "Transactions", icon: "transactions" },
+  { href: "/dashboard/customers", label: "Customers", icon: "customers" },
+  { href: "/dashboard/refunds", label: "Refunds", icon: "refunds" },
   { href: "/dashboard/sandbox", label: "Sandbox", icon: "sandbox" },
   { href: "/dashboard/checkout", label: "Checkout", icon: "checkout" },
   { href: "/dashboard/payment-links", label: "Payment links", icon: "links" },
@@ -96,6 +104,35 @@ function NavIcon({ name, className }: { name: NavLink["icon"]; className?: strin
         <svg {...common}>
           <path {...stroke} d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v9A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-9Z" />
           <path {...stroke} d="M4 10h16" />
+        </svg>
+      );
+    case "balances":
+      return (
+        <svg {...common}>
+          <path {...stroke} d="M4 7h16v10H4V7Z" />
+          <path {...stroke} d="M4 11h16M12 11v6" />
+        </svg>
+      );
+    case "transactions":
+      return (
+        <svg {...common}>
+          <path {...stroke} d="M7 7h13l-3-3M17 17H4l3 3" />
+          <path {...stroke} d="M20 7v4M4 17v-4" />
+        </svg>
+      );
+    case "customers":
+      return (
+        <svg {...common}>
+          <path {...stroke} d="M16 21v-2a3 3 0 0 0-3-3H6a3 3 0 0 0-3 3v2" />
+          <circle {...stroke} cx="9.5" cy="7.5" r="3" />
+          <path {...stroke} d="M22 21v-2a3 3 0 0 0-2.2-2.9M16.5 4.6a3 3 0 0 1 0 5.8" />
+        </svg>
+      );
+    case "refunds":
+      return (
+        <svg {...common}>
+          <path {...stroke} d="M9 14 4 9l5-5" />
+          <path {...stroke} d="M4 9h10a6 6 0 0 1 0 12h-3" />
         </svg>
       );
     case "checkout":
