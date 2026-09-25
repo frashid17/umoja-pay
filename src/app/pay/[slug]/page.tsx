@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PaymentLinkPublicView } from "@/components/payment-links/public-view";
 import { getAppOrigin } from "@/lib/app-url";
@@ -64,19 +63,5 @@ export default async function PayLinkPage({
       payUrl={payUrl}
       slug={link.slug}
     />
-  );
-}
-
-export function PayUnavailable() {
-  return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-atmosphere px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center">
-        <h1 className="font-display text-2xl font-bold text-foreground">Link not found</h1>
-        <p className="mt-2 text-sm text-muted">This payment link is inactive or does not exist.</p>
-        <Link href="/" className="mt-6 inline-block text-sm font-medium text-accent hover:underline">
-          Powered by Umoja Pay
-        </Link>
-      </div>
-    </div>
   );
 }
