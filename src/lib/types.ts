@@ -2,13 +2,21 @@ export type MerchantStatus = "draft" | "pending_kyc" | "active" | "rejected" | "
 export type MemberRole = "owner" | "developer";
 export type KycStatus = "draft" | "pending" | "approved" | "rejected";
 export type ApiKeyMode = "test" | "live";
-export type PaymentStatus = "pending" | "processing" | "succeeded" | "failed" | "canceled";
+export type PaymentStatus =
+  | "pending"
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "canceled"
+  | "partially_refunded"
+  | "refunded";
 export type PaymentMethod = "mpesa_stk" | "card";
 export type CurrencyCode = "KES" | "TZS" | "UGX" | "RWF";
 export type CountryCode = "KE" | "TZ" | "UG" | "RW";
 export type SettlementStatus = "pending" | "processing" | "paid" | "failed";
 export type CheckoutSessionStatus = "open" | "completed" | "expired" | "canceled";
 export type PaymentLinkStatus = "active" | "archived";
+export type RefundStatus = "pending" | "processing" | "succeeded" | "failed" | "canceled";
 
 export type Merchant = {
   id: string;
@@ -166,6 +174,24 @@ export type Settlement = {
   reference: string | null;
   failure_reason: string | null;
   paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Refund = {
+  id: string;
+  merchant_id: string;
+  payment_id: string;
+  amount: number;
+  currency: CurrencyCode;
+  method: PaymentMethod;
+  status: RefundStatus;
+  mode: ApiKeyMode;
+  reason: string | null;
+  provider_ref: string | null;
+  failure_reason: string | null;
+  created_by: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };
