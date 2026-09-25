@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from "crypto";
 import { createServiceClient } from "@/lib/supabase/admin";
-import type { ApiKeyMode, Payment } from "@/lib/types";
+import type { ApiKeyMode, Payment, Refund } from "@/lib/types";
 
 export function generateWebhookSecret(): string {
   return `whsec_${randomBytes(24).toString("base64url")}`;
@@ -41,6 +41,69 @@ export async function dispatchPaymentWebhook(payment: Payment) {
         failure_reason: payment.failure_reason,
         created_at: payment.created_at,
         updated_at: payment.updated_at,
+      },
+    },
+  };
+
+  const body = JSON.stringify(event);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = signPayload(endpoint.signing_secret, body, timestamp);
+
+  const send = async () => {
+    const res = await fetch(endpoint.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Umoja-Signature": `t=${timestamp},v1=${signature}`,
+        "X-Umoja-Event": event.type,
+      },
+      body,
+    });
+    return res.ok;
+  };
+
+  try {
+    const ok = await send();
+    if (!ok) await send();
+  } catch {
+    try {
+      await send();
+    } catch {
+      // MVP: single retry; durable queue later
+    }
+  }
+}
+
+export async function dispatchRefundWebhook(refund: Refund) {
+  const supabase = createServiceClient();
+  const { data: endpoint } = await supabase
+    .from("webhook_endpoints")
+    .select("*")
+    .eq("merchant_id", refund.merchant_id)
+    .eq("mode", refund.mode)
+    .eq("enabled", true)
+    .maybeSingle();
+
+  if (!endpoint?.url) return;
+
+  const event = {
+    id: `evt_${refund.id}`,
+    type: `refund.${refund.status}`,
+    created: Math.floor(Date.now() / 1000),
+    data: {
+      object: {
+        id: refund.id,
+        payment_id: refund.payment_id,
+        amount: refund.amount,
+        currency: refund.currency,
+        method: refund.method,
+        status: refund.status,
+        reason: refund.reason,
+        mode: refund.mode,
+        failure_reason: refund.failure_reason,
+        metadata: refund.metadata,
+        created_at: refund.created_at,
+        updated_at: refund.updated_at,
       },
     },
   };
