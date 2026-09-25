@@ -1,4 +1,4 @@
-import type { ApiKeyMode, PaymentMethod, PaymentStatus } from "@/lib/types";
+import type { ApiKeyMode, PaymentStatus } from "@/lib/types";
 import {
   getPaystackPublicKey,
   paystackChargeMpesa,
