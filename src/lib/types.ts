@@ -8,6 +8,7 @@ export type CurrencyCode = "KES" | "TZS" | "UGX" | "RWF";
 export type CountryCode = "KE" | "TZ" | "UG" | "RW";
 export type SettlementStatus = "pending" | "processing" | "paid" | "failed";
 export type CheckoutSessionStatus = "open" | "completed" | "expired" | "canceled";
+export type PaymentLinkStatus = "active" | "archived";
 
 export type Merchant = {
   id: string;
@@ -109,6 +110,22 @@ export type CheckoutSession = {
   metadata: Record<string, unknown>;
   expires_at: string;
   completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentLink = {
+  id: string;
+  merchant_id: string;
+  slug: string;
+  product_name: string;
+  description: string | null;
+  amount: number;
+  currency: CurrencyCode;
+  image_path: string | null;
+  mode: ApiKeyMode;
+  status: PaymentLinkStatus;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };
