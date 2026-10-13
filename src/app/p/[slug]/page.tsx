@@ -3,12 +3,8 @@ import { notFound } from "next/navigation";
 import { startProductCheckout } from "@/app/p/actions";
 import { LogoMark } from "@/components/brand/logo";
 import { getMerchantForCheckout, merchantLogoPublicUrl } from "@/lib/checkout/sessions";
-import {
-  formatPriceLabel,
-  formatPriceMoney,
-  getProductBySlug,
-  productImagePublicUrl,
-} from "@/lib/products";
+import { formatPriceLabel, formatPriceMoney } from "@/lib/products/format";
+import { getProductBySlug, productImagePublicUrl } from "@/lib/products";
 import { PRICE_INTERVALS } from "@/lib/types";
 
 export default async function ProductStorePage({
