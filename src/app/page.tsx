@@ -3,7 +3,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { HeroPayMoment } from "@/components/home/hero-pay-moment";
 import { LogoMark } from "@/components/brand/logo";
-import { getSessionUser, getUserMerchant, isPlatformAdmin } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant, isPlatformAdmin } from "@/lib/session";
 
 export default async function HomePage() {
   const user = await getSessionUser();
@@ -199,7 +199,7 @@ export default async function HomePage() {
               Defensible by default
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted">
-              Multi-tenant isolation, hashed secrets, signed webhooks, and audit logs — so you can
+              Multi-tenant isolation, hashed secrets, signed webhooks, and audit logs, so you can
               integrate without inventing your own payment ops stack.
             </p>
             <ul className="mt-8 space-y-4 text-sm text-muted">
