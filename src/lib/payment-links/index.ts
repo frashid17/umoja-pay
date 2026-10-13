@@ -1,6 +1,10 @@
+import "server-only";
+
 import { isUniqueViolation, one, q } from "@/lib/db";
-import { publicObjectUrl } from "@/lib/storage";
+import { publicObjectUrl } from "@/lib/storage/urls";
 import type { ApiKeyMode, CurrencyCode, PaymentLink } from "@/lib/types";
+
+export { formatLinkMoney } from "@/lib/payment-links/format";
 
 export type CreatePaymentLinkInput = {
   merchantId: string;
@@ -96,11 +100,4 @@ export async function archivePaymentLink(id: string, merchantId: string) {
 
 export function paymentLinkImagePublicUrl(imagePath: string | null | undefined) {
   return publicObjectUrl("payment-link-images", imagePath);
-}
-
-export function formatLinkMoney(amount: number, currency: CurrencyCode) {
-  return `${(amount / 100).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })} ${currency}`;
 }
