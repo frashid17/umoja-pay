@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from "crypto";
-import { createServiceClient } from "@/lib/supabase/admin";
-import type { ApiKeyMode, Payment, Refund } from "@/lib/types";
+import { one, q } from "@/lib/db";
+import type { ApiKeyMode, Payment, Refund, WebhookEndpoint } from "@/lib/types";
 
 export function generateWebhookSecret(): string {
   return `whsec_${randomBytes(24).toString("base64url")}`;
@@ -11,16 +11,47 @@ export function signPayload(secret: string, body: string, timestamp: number): st
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-export async function dispatchPaymentWebhook(payment: Payment) {
-  const supabase = createServiceClient();
-  const { data: endpoint } = await supabase
-    .from("webhook_endpoints")
-    .select("*")
-    .eq("merchant_id", payment.merchant_id)
-    .eq("mode", payment.mode)
-    .eq("enabled", true)
-    .maybeSingle();
+async function endpointFor(merchantId: string, mode: ApiKeyMode) {
+  return one(
+    await q<WebhookEndpoint>`
+      select * from webhook_endpoints
+      where merchant_id = ${merchantId}
+        and mode = ${mode}::api_key_mode
+        and enabled = true
+    `,
+  );
+}
 
+async function postSigned(url: string, secret: string, eventType: string, body: string) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = signPayload(secret, body, timestamp);
+  const send = async () => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Umoja-Signature": `t=${timestamp},v1=${signature}`,
+        "X-Umoja-Event": eventType,
+      },
+      body,
+    });
+    return res.ok;
+  };
+
+  try {
+    const ok = await send();
+    if (!ok) await send();
+  } catch {
+    try {
+      await send();
+    } catch {
+      // MVP: single retry; durable queue later
+    }
+  }
+}
+
+export async function dispatchPaymentWebhook(payment: Payment) {
+  const endpoint = await endpointFor(payment.merchant_id, payment.mode);
   if (!endpoint?.url) return;
 
   const event = {
@@ -45,45 +76,11 @@ export async function dispatchPaymentWebhook(payment: Payment) {
     },
   };
 
-  const body = JSON.stringify(event);
-  const timestamp = Math.floor(Date.now() / 1000);
-  const signature = signPayload(endpoint.signing_secret, body, timestamp);
-
-  const send = async () => {
-    const res = await fetch(endpoint.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Umoja-Signature": `t=${timestamp},v1=${signature}`,
-        "X-Umoja-Event": event.type,
-      },
-      body,
-    });
-    return res.ok;
-  };
-
-  try {
-    const ok = await send();
-    if (!ok) await send();
-  } catch {
-    try {
-      await send();
-    } catch {
-      // MVP: single retry; durable queue later
-    }
-  }
+  await postSigned(endpoint.url, endpoint.signing_secret, event.type, JSON.stringify(event));
 }
 
 export async function dispatchRefundWebhook(refund: Refund) {
-  const supabase = createServiceClient();
-  const { data: endpoint } = await supabase
-    .from("webhook_endpoints")
-    .select("*")
-    .eq("merchant_id", refund.merchant_id)
-    .eq("mode", refund.mode)
-    .eq("enabled", true)
-    .maybeSingle();
-
+  const endpoint = await endpointFor(refund.merchant_id, refund.mode);
   if (!endpoint?.url) return;
 
   const event = {
@@ -108,33 +105,7 @@ export async function dispatchRefundWebhook(refund: Refund) {
     },
   };
 
-  const body = JSON.stringify(event);
-  const timestamp = Math.floor(Date.now() / 1000);
-  const signature = signPayload(endpoint.signing_secret, body, timestamp);
-
-  const send = async () => {
-    const res = await fetch(endpoint.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Umoja-Signature": `t=${timestamp},v1=${signature}`,
-        "X-Umoja-Event": event.type,
-      },
-      body,
-    });
-    return res.ok;
-  };
-
-  try {
-    const ok = await send();
-    if (!ok) await send();
-  } catch {
-    try {
-      await send();
-    } catch {
-      // MVP: single retry; durable queue later
-    }
-  }
+  await postSigned(endpoint.url, endpoint.signing_secret, event.type, JSON.stringify(event));
 }
 
 export async function upsertWebhookEndpoint(input: {
@@ -142,39 +113,39 @@ export async function upsertWebhookEndpoint(input: {
   url: string;
   mode: ApiKeyMode;
 }) {
-  const supabase = createServiceClient();
-  const signingSecret = generateWebhookSecret();
-
-  const { data: existing } = await supabase
-    .from("webhook_endpoints")
-    .select("id, signing_secret")
-    .eq("merchant_id", input.merchantId)
-    .eq("mode", input.mode)
-    .maybeSingle();
+  const existing = one(
+    await q<Pick<WebhookEndpoint, "id" | "signing_secret">>`
+      select id, signing_secret from webhook_endpoints
+      where merchant_id = ${input.merchantId} and mode = ${input.mode}::api_key_mode
+    `,
+  );
 
   if (existing) {
-    const { data, error } = await supabase
-      .from("webhook_endpoints")
-      .update({ url: input.url, enabled: true })
-      .eq("id", existing.id)
-      .select("*")
-      .single();
-    if (error) throw error;
-    return data;
+    const row = one(
+      await q<WebhookEndpoint>`
+        update webhook_endpoints
+        set url = ${input.url}, enabled = true
+        where id = ${existing.id}
+        returning *
+      `,
+    );
+    if (!row) throw new Error("Webhook endpoint not found");
+    return row;
   }
 
-  const { data, error } = await supabase
-    .from("webhook_endpoints")
-    .insert({
-      merchant_id: input.merchantId,
-      url: input.url,
-      mode: input.mode,
-      signing_secret: signingSecret,
-      enabled: true,
-    })
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return data;
+  const row = one(
+    await q<WebhookEndpoint>`
+      insert into webhook_endpoints (merchant_id, url, mode, signing_secret, enabled)
+      values (
+        ${input.merchantId},
+        ${input.url},
+        ${input.mode}::api_key_mode,
+        ${generateWebhookSecret()},
+        true
+      )
+      returning *
+    `,
+  );
+  if (!row) throw new Error("Could not create webhook endpoint");
+  return row;
 }
