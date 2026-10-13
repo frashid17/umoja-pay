@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { UserButton } from "@clerk/nextjs";
+import { AccountMenu } from "@/components/auth/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LogoMark } from "@/components/brand/logo";
 
@@ -25,7 +25,9 @@ type NavLink = {
     | "settings"
     | "merchants"
     | "checkout"
-    | "links";
+    | "links"
+    | "products"
+    | "invoices";
 };
 
 const merchantLinks: NavLink[] = [
@@ -36,6 +38,8 @@ const merchantLinks: NavLink[] = [
   { href: "/dashboard/refunds", label: "Refunds", icon: "refunds" },
   { href: "/dashboard/sandbox", label: "Sandbox", icon: "sandbox" },
   { href: "/dashboard/checkout", label: "Checkout", icon: "checkout" },
+  { href: "/dashboard/products", label: "Products", icon: "products" },
+  { href: "/dashboard/invoices", label: "Invoices", icon: "invoices" },
   { href: "/dashboard/payment-links", label: "Payment links", icon: "links" },
   { href: "/dashboard/kyc", label: "KYC", icon: "kyc" },
   { href: "/dashboard/keys", label: "API keys", icon: "keys" },
@@ -147,6 +151,20 @@ function NavIcon({ name, className }: { name: NavLink["icon"]; className?: strin
         <svg {...common}>
           <path {...stroke} d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5.93" />
           <path {...stroke} d="M14 11a5 5 0 0 0-7.07 0L5.5 12.43a5 5 0 0 0 7.07 7.07L14 18.07" />
+        </svg>
+      );
+    case "products":
+      return (
+        <svg {...common}>
+          <path {...stroke} d="M4 8.5 12 4l8 4.5V19l-8 4-8-4V8.5Z" />
+          <path {...stroke} d="M12 12v11M4 8.5l8 4.5 8-4.5" />
+        </svg>
+      );
+    case "invoices":
+      return (
+        <svg {...common}>
+          <path {...stroke} d="M7 3.5h7l3 3V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+          <path {...stroke} d="M14 3.5V7h3M9 11h6M9 14.5h6M9 18h4" />
         </svg>
       );
     case "settlements":
@@ -320,7 +338,7 @@ export function AppShell({
               Docs
             </Link>
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-              <UserButton />
+              <AccountMenu />
               <ThemeToggle />
             </div>
           </div>
