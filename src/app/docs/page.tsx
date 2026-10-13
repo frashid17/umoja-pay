@@ -13,7 +13,7 @@ export default function DocsWelcomePage() {
       <DocsPageHeader
         eyebrow="Umoja Pay Merchant API"
         title="Welcome"
-        lead="Get paid with mobile money in East Africa. One STK-shaped API for merchants — sandbox first, live after KYC, same objects in both modes."
+        lead="Get paid with mobile money in East Africa. One STK-shaped API for merchants: sandbox first, live after KYC, same objects in both modes."
       />
 
       <h2 className="font-display text-xl font-semibold text-foreground">Learn more</h2>
@@ -62,7 +62,7 @@ export default function DocsWelcomePage() {
         <DocCard
           href="/docs/reference"
           title="API reference"
-          description="Endpoint and model docs — each operation on its own page."
+          description="Endpoint and model docs: each operation on its own page."
         />
       </div>
 
