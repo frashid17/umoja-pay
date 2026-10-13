@@ -53,7 +53,7 @@ export function ApiKeysManager({
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         {secret ? (
           <div className="rounded-md border border-accent/40 bg-accent-soft p-3 text-sm">
-            <p className="font-medium">Copy this secret now — it will not be shown again.</p>
+            <p className="font-medium">Copy this secret now. It will not be shown again.</p>
             <code className="mt-2 block break-all font-mono text-xs">{secret}</code>
           </div>
         ) : null}
