@@ -85,7 +85,7 @@ export function HeroPayMoment() {
 
   return (
     <>
-      {/* Mobile — compact story card */}
+      {/* Mobile: compact story card */}
       <div className="animate-fade-up-delay-2 mt-8 lg:hidden">
         <div className="relative mx-auto h-[168px] w-full max-w-[280px]">
           <div
@@ -158,7 +158,7 @@ export function HeroPayMoment() {
         </div>
       </div>
 
-      {/* Desktop — wide story + rails */}
+      {/* Desktop: wide story + rails */}
       <div className="animate-fade-up-delay relative hidden w-full max-w-xl justify-self-end lg:block xl:max-w-2xl">
         <div
           className="pointer-events-none absolute -inset-10 rounded-[2.5rem] bg-accent/15 blur-3xl"
