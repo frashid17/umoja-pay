@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { submitKyc } from "@/app/dashboard/kyc/actions";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { q } from "@/lib/db";
+import type { KycSubmission } from "@/lib/types";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import { COUNTRIES } from "@/lib/types";
 
 export default async function KycPage() {
@@ -12,17 +13,16 @@ export default async function KycPage() {
   const ctx = await getUserMerchant(user.id);
   if (!ctx) redirect("/onboarding");
 
-  const supabase = createServiceClient();
-  const { data: submissions } = await supabase
-    .from("kyc_submissions")
-    .select("*")
-    .eq("merchant_id", ctx.merchant.id)
-    .order("created_at", { ascending: false });
+  const submissions = await q<KycSubmission>`
+    select * from kyc_submissions
+    where merchant_id = ${ctx.merchant.id}
+    order by created_at desc
+  `;
 
   const canSubmit =
     ctx.merchant.status === "draft" ||
     ctx.merchant.status === "rejected" ||
-    !(submissions ?? []).some((s) => s.status === "pending");
+    !submissions.some((s) => s.status === "pending");
 
   return (
     <AppShell
@@ -113,7 +113,7 @@ export default async function KycPage() {
       <div className="mt-10">
         <h2 className="font-display text-xl">Submission history</h2>
         <ul className="mt-4 space-y-3">
-          {(submissions ?? []).map((s) => (
+          {submissions.map((s) => (
             <li key={s.id} className="rounded-lg border border-border bg-card p-4 text-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={s.status} />
