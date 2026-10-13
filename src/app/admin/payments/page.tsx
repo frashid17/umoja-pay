@@ -1,40 +1,27 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
+import { countOf, q } from "@/lib/db";
+import type { Payment } from "@/lib/types";
+import { getSessionUser, isPlatformAdmin } from "@/lib/session";
 
 export default async function AdminPaymentsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/sign-in");
   if (!(await isPlatformAdmin(user.id, user.email))) redirect("/dashboard");
 
-  const supabase = createServiceClient();
-  const [
-    { data: payments },
-    { count: total },
-    { count: succeeded },
-    { count: failed },
-    { count: live },
-  ] = await Promise.all([
-    supabase
-      .from("payments")
-      .select("*, merchants(name)")
-      .order("created_at", { ascending: false })
-      .limit(100),
-    supabase.from("payments").select("*", { count: "exact", head: true }),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "succeeded"),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "failed"),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("mode", "live"),
+  const [payments, total, succeeded, failed, live] = await Promise.all([
+    q<Payment & { merchants: { name: string } | null }>`
+      select p.*, json_build_object('name', m.name) as merchants
+      from payments p
+      join merchants m on m.id = p.merchant_id
+      order by p.created_at desc
+      limit 100
+    `,
+    countOf`select count(*)::int as count from payments`,
+    countOf`select count(*)::int as count from payments where status = 'succeeded'`,
+    countOf`select count(*)::int as count from payments where status = 'failed'`,
+    countOf`select count(*)::int as count from payments where mode = 'live'`,
   ]);
 
   return (
@@ -92,7 +79,7 @@ export default async function AdminPaymentsPage() {
                   </div>
                   <div>
                     <dt className="text-muted">Phone</dt>
-                    <dd className="mt-0.5 truncate font-mono text-foreground">{p.phone ?? "—"}</dd>
+                    <dd className="mt-0.5 truncate font-mono text-foreground">{p.phone ?? "-"}</dd>
                   </div>
                   <div>
                     <dt className="text-muted">Created</dt>
