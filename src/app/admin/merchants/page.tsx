@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
+import { q } from "@/lib/db";
+import type { Merchant } from "@/lib/types";
+import { getSessionUser, isPlatformAdmin } from "@/lib/session";
 
 const countryLabels: Record<string, string> = {
   KE: "Kenya",
@@ -17,32 +18,26 @@ export default async function AdminMerchantsPage() {
   if (!user) redirect("/sign-in");
   if (!(await isPlatformAdmin(user.id, user.email))) redirect("/dashboard");
 
-  const supabase = createServiceClient();
-  const { data: merchants } = await supabase
-    .from("merchants")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const merchants = await q<Merchant>`select * from merchants order by created_at desc`;
 
-  const ids = (merchants ?? []).map((m) => m.id);
-  const [{ data: paymentRows }, { data: keyRows }, { data: kycRows }] = await Promise.all([
-    ids.length
-      ? supabase.from("payments").select("merchant_id, status").in("merchant_id", ids)
-      : Promise.resolve({ data: [] as { merchant_id: string; status: string }[] }),
-    ids.length
-      ? supabase
-          .from("api_keys")
-          .select("merchant_id")
-          .in("merchant_id", ids)
-          .is("revoked_at", null)
-      : Promise.resolve({ data: [] as { merchant_id: string }[] }),
-    ids.length
-      ? supabase
-          .from("kyc_submissions")
-          .select("merchant_id, status")
-          .in("merchant_id", ids)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [] as { merchant_id: string; status: string }[] }),
-  ]);
+  const ids = merchants.map((m) => m.id);
+  const [paymentRows, keyRows, kycRows] = ids.length
+    ? await Promise.all([
+        q<{ merchant_id: string; status: string }>`
+          select merchant_id, status::text as status from payments
+          where merchant_id = any(${ids}::uuid[])
+        `,
+        q<{ merchant_id: string }>`
+          select merchant_id from api_keys
+          where merchant_id = any(${ids}::uuid[]) and revoked_at is null
+        `,
+        q<{ merchant_id: string; status: string }>`
+          select merchant_id, status::text as status from kyc_submissions
+          where merchant_id = any(${ids}::uuid[])
+          order by created_at desc
+        `,
+      ])
+    : [[], [], []];
 
   const paymentCountByMerchant = new Map<string, number>();
   for (const row of paymentRows ?? []) {
@@ -73,7 +68,7 @@ export default async function AdminMerchantsPage() {
     <AppShell
       variant="admin"
       title="Merchants"
-      subtitle="Every business registered on Umoja Pay — status, KYC, keys, and payment volume."
+      subtitle="Every business registered on Umoja Pay, status, KYC, keys, and payment volume."
     >
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
