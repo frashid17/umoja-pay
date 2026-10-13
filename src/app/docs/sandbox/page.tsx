@@ -44,7 +44,7 @@ export default function SandboxPage() {
           headers={["Phone ends with", "Outcome"]}
           rows={[
             ["0", "failed (customer declined / insufficient funds)"],
-            ["1–9", "succeeded"],
+            ["1-9", "succeeded"],
           ]}
         />
         <CodeBlock title="Fail fixture">{`curl -X POST "$BASE_URL/api/v1/payments" \\
