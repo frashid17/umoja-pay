@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { CheckoutDashboard } from "@/app/dashboard/checkout/checkout-dashboard";
 import { merchantLogoPublicUrl } from "@/lib/checkout/sessions";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 
 export default async function MerchantCheckoutPage() {
   const user = await getSessionUser();
