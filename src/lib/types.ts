@@ -17,6 +17,17 @@ export type SettlementStatus = "pending" | "processing" | "paid" | "failed";
 export type CheckoutSessionStatus = "open" | "completed" | "expired" | "canceled";
 export type PaymentLinkStatus = "active" | "archived";
 export type RefundStatus = "pending" | "processing" | "succeeded" | "failed" | "canceled";
+export type ProductStatus = "active" | "archived";
+export type ProductFulfillment = "goods_services" | "digital" | "hybrid";
+export type ProductPricingType = "single" | "pay_what_you_want" | "subscription" | "usage";
+export type PriceInterval = "one_time" | "day" | "week" | "month" | "year";
+export type InvoiceStatus = "draft" | "open" | "paid" | "void";
+
+export type InvoiceLineItem = {
+  description: string;
+  quantity: number;
+  unit_amount: number;
+};
 
 export type Merchant = {
   id: string;
@@ -138,6 +149,60 @@ export type PaymentLink = {
   updated_at: string;
 };
 
+export type Product = {
+  id: string;
+  merchant_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  image_path: string | null;
+  fulfillment: ProductFulfillment;
+  pricing_type: ProductPricingType;
+  track_stock: boolean;
+  stock_quantity: number | null;
+  mode: ApiKeyMode;
+  status: ProductStatus;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductPrice = {
+  id: string;
+  product_id: string;
+  merchant_id: string;
+  amount: number;
+  currency: CurrencyCode;
+  billing_interval: PriceInterval;
+  nickname: string | null;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Invoice = {
+  id: string;
+  merchant_id: string;
+  slug: string;
+  number: string;
+  customer_name: string;
+  customer_email: string | null;
+  customer_phone: string | null;
+  currency: CurrencyCode;
+  amount: number;
+  line_items: InvoiceLineItem[];
+  memo: string | null;
+  due_date: string | null;
+  status: InvoiceStatus;
+  mode: ApiKeyMode;
+  payment_id: string | null;
+  paid_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WebhookEndpoint = {
   id: string;
   merchant_id: string;
@@ -204,3 +269,60 @@ export const COUNTRIES: { code: CountryCode; label: string }[] = [
 ];
 
 export const CURRENCIES: CurrencyCode[] = ["KES", "TZS", "UGX", "RWF"];
+
+export const PRICE_INTERVALS: { value: PriceInterval; label: string; short: string }[] = [
+  { value: "one_time", label: "One-time", short: "once" },
+  { value: "day", label: "Daily", short: "per day" },
+  { value: "week", label: "Weekly", short: "per week" },
+  { value: "month", label: "Monthly", short: "per month" },
+  { value: "year", label: "Yearly", short: "per year" },
+];
+
+export const PRODUCT_FULFILLMENTS: {
+  value: ProductFulfillment;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "goods_services",
+    label: "Goods & services",
+    description: "Products or services fulfilled outside the platform. Optional inventory tracking.",
+  },
+  {
+    value: "digital",
+    label: "Digital",
+    description: "Downloadable files delivered after payment.",
+  },
+  {
+    value: "hybrid",
+    label: "Hybrid",
+    description: "Goods or services plus downloadable files.",
+  },
+];
+
+export const PRODUCT_PRICING_TYPES: {
+  value: ProductPricingType;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "single",
+    label: "Single payment",
+    description: "One-time purchase with no recurring charges.",
+  },
+  {
+    value: "pay_what_you_want",
+    label: "Pay what you want",
+    description: "Let customers choose their own price, ideal for donations and tips.",
+  },
+  {
+    value: "subscription",
+    label: "Subscription",
+    description: "Recurring plans. Offer daily, monthly, or yearly prices customers can pick.",
+  },
+  {
+    value: "usage",
+    label: "Usage-based",
+    description: "Charge based on usage or consumption.",
+  },
+];
