@@ -16,15 +16,15 @@ export default function CookiesPage() {
         <h2 className="font-display text-xl font-semibold text-foreground">Types we use</h2>
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <strong className="text-foreground">Essential</strong> — authentication sessions, CSRF
+            <strong className="text-foreground">Essential</strong>: authentication sessions, CSRF
             protection, load balancing.
           </li>
           <li>
-            <strong className="text-foreground">Preferences</strong> — theme (light / dark /
+            <strong className="text-foreground">Preferences</strong>: theme (light / dark /
             system) and locale when available.
           </li>
           <li>
-            <strong className="text-foreground">Analytics</strong> — only if enabled later to
+            <strong className="text-foreground">Analytics</strong>, only if enabled later to
             understand product usage; we will update this page before enabling non-essential
             analytics cookies.
           </li>
