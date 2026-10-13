@@ -1,6 +1,6 @@
-import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
 import { getAppOrigin } from "@/lib/app-url";
+import { isUniqueViolation, one, q } from "@/lib/db";
 import { getAdapterForMethod, serializePayment } from "@/lib/payments/adapter";
 import { isPaystackConfigured } from "@/lib/paystack/client";
 import { dispatchPaymentWebhook } from "@/lib/webhooks";
@@ -32,8 +32,16 @@ export type CreatePaymentResult = {
   publicKey?: string | null;
 };
 
+async function findIdempotentPayment(merchantId: string, idempotencyKey: string) {
+  return one(
+    await q<Payment>`
+      select * from payments
+      where merchant_id = ${merchantId} and idempotency_key = ${idempotencyKey}
+    `,
+  );
+}
+
 export async function createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
-  const supabase = createServiceClient();
   const method: PaymentMethod = input.method ?? "mpesa_stk";
   const usingPaystack = isPaystackConfigured(input.mode);
 
@@ -45,16 +53,8 @@ export async function createPayment(input: CreatePaymentInput): Promise<CreatePa
   }
 
   if (input.idempotencyKey) {
-    const { data: existing } = await supabase
-      .from("payments")
-      .select("*")
-      .eq("merchant_id", input.merchantId)
-      .eq("idempotency_key", input.idempotencyKey)
-      .maybeSingle();
-
-    if (existing) {
-      return { payment: existing as Payment, created: false };
-    }
+    const existing = await findIdempotentPayment(input.merchantId, input.idempotencyKey);
+    if (existing) return { payment: existing, created: false };
   }
 
   const metadata: Record<string, unknown> = {
@@ -66,37 +66,39 @@ export async function createPayment(input: CreatePaymentInput): Promise<CreatePa
     ...(usingPaystack ? { provider: "paystack" } : { provider: "sandbox" }),
   };
 
-  const { data: inserted, error } = await supabase
-    .from("payments")
-    .insert({
-      merchant_id: input.merchantId,
-      amount: input.amount,
-      currency: input.currency,
-      method,
-      phone: method === "mpesa_stk" ? input.phone : null,
-      status: "processing",
-      mode: input.mode,
-      reference: input.reference ?? null,
-      metadata,
-      idempotency_key: input.idempotencyKey ?? null,
-    })
-    .select("*")
-    .single();
-
-  if (error) {
-    if (error.code === "23505" && input.idempotencyKey) {
-      const { data: existing } = await supabase
-        .from("payments")
-        .select("*")
-        .eq("merchant_id", input.merchantId)
-        .eq("idempotency_key", input.idempotencyKey)
-        .single();
-      return { payment: existing as Payment, created: false };
+  let payment: Payment;
+  try {
+    const inserted = one(
+      await q<Payment>`
+        insert into payments (
+          merchant_id, amount, currency, method, phone, status, mode, reference,
+          metadata, idempotency_key
+        )
+        values (
+          ${input.merchantId},
+          ${input.amount},
+          ${input.currency}::currency_code,
+          ${method}::payment_method,
+          ${method === "mpesa_stk" ? input.phone : null},
+          'processing',
+          ${input.mode}::api_key_mode,
+          ${input.reference ?? null},
+          ${JSON.stringify(metadata)}::jsonb,
+          ${input.idempotencyKey ?? null}
+        )
+        returning *
+      `,
+    );
+    if (!inserted) throw new Error("Failed to create payment");
+    payment = inserted;
+  } catch (error) {
+    if (isUniqueViolation(error) && input.idempotencyKey) {
+      const existing = await findIdempotentPayment(input.merchantId, input.idempotencyKey);
+      if (existing) return { payment: existing, created: false };
     }
     throw error;
   }
 
-  const payment = inserted as Payment;
   const adapter = getAdapterForMethod(method, input.mode);
   const origin = await getAppOrigin().catch(() => process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000");
 
@@ -120,21 +122,19 @@ export async function createPayment(input: CreatePaymentInput): Promise<CreatePa
     ...(result.authorizationUrl ? { paystack_authorization_url: result.authorizationUrl } : {}),
   };
 
-  const { data: updated, error: updateError } = await supabase
-    .from("payments")
-    .update({
-      status: result.status,
-      provider_ref: result.providerRef,
-      failure_reason: result.failureReason ?? null,
-      metadata: nextMetadata,
-    })
-    .eq("id", payment.id)
-    .select("*")
-    .single();
-
-  if (updateError) throw updateError;
-
-  const finalPayment = updated as Payment;
+  const updated = one(
+    await q<Payment>`
+      update payments
+      set status = ${result.status}::payment_status,
+          provider_ref = ${result.providerRef},
+          failure_reason = ${result.failureReason ?? null},
+          metadata = ${JSON.stringify(nextMetadata)}::jsonb
+      where id = ${payment.id}
+      returning *
+    `,
+  );
+  if (!updated) throw new Error("Failed to update payment");
+  const finalPayment = updated;
 
   await writeAuditLog({
     merchantId: payment.merchant_id,
@@ -174,52 +174,37 @@ export async function applyProviderPaymentStatus(input: {
   cardLast4?: string | null;
   channel?: string | null;
 }) {
-  const supabase = createServiceClient();
-  const { data: paymentById, error } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("id", input.reference)
-    .maybeSingle();
-
-  if (error) throw error;
-  let payment = paymentById;
+  let payment = one(await q<Payment>`select * from payments where id = ${input.reference}`);
   if (!payment) {
-    const byRef = await supabase
-      .from("payments")
-      .select("*")
-      .eq("provider_ref", input.reference)
-      .maybeSingle();
-    if (byRef.error) throw byRef.error;
-    payment = byRef.data;
+    payment = one(
+      await q<Payment>`select * from payments where provider_ref = ${input.reference}`,
+    );
   }
-
   if (!payment) return null;
 
-  const p = payment as Payment;
-  if (p.status === "succeeded" || p.status === "refunded" || p.status === "partially_refunded") {
-    if (input.status === "succeeded") return p;
+  if (payment.status === "succeeded" || payment.status === "refunded" || payment.status === "partially_refunded") {
+    if (input.status === "succeeded") return payment;
   }
 
   const metadata = {
-    ...p.metadata,
+    ...payment.metadata,
     ...(input.cardLast4 ? { card_last4: input.cardLast4 } : {}),
     ...(input.channel ? { paystack_channel: input.channel } : {}),
   };
 
-  const { data: updated, error: updateError } = await supabase
-    .from("payments")
-    .update({
-      status: input.status,
-      provider_ref: input.providerRef ?? p.provider_ref ?? input.reference,
-      failure_reason: input.failureReason ?? null,
-      metadata,
-    })
-    .eq("id", p.id)
-    .select("*")
-    .single();
-
-  if (updateError) throw updateError;
-  const finalPayment = updated as Payment;
+  const updated = one(
+    await q<Payment>`
+      update payments
+      set status = ${input.status}::payment_status,
+          provider_ref = ${input.providerRef ?? payment.provider_ref ?? input.reference},
+          failure_reason = ${input.failureReason ?? null},
+          metadata = ${JSON.stringify(metadata)}::jsonb
+      where id = ${payment.id}
+      returning *
+    `,
+  );
+  if (!updated) throw new Error("Failed to update payment");
+  const finalPayment = updated;
 
   if (finalPayment.status === "succeeded" || finalPayment.status === "failed") {
     await writeAuditLog({
@@ -245,59 +230,68 @@ export async function applyProviderPaymentStatus(input: {
 }
 
 export async function getPayment(merchantId: string, paymentId: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("id", paymentId)
-    .eq("merchant_id", merchantId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as Payment | null;
+  return one(
+    await q<Payment>`
+      select * from payments
+      where id = ${paymentId} and merchant_id = ${merchantId}
+    `,
+  );
 }
 
 export async function getPaymentById(paymentId: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase.from("payments").select("*").eq("id", paymentId).maybeSingle();
-  if (error) throw error;
-  return data as Payment | null;
+  return one(await q<Payment>`select * from payments where id = ${paymentId}`);
 }
 
 export async function listPayments(
   merchantId: string,
   opts: { limit?: number; startingAfter?: string; mode?: ApiKeyMode } = {},
 ) {
-  const supabase = createServiceClient();
   const limit = Math.min(opts.limit ?? 20, 100);
-
-  let query = supabase
-    .from("payments")
-    .select("*")
-    .eq("merchant_id", merchantId)
-    .order("created_at", { ascending: false })
-    .limit(limit + 1);
-
-  if (opts.mode) {
-    query = query.eq("mode", opts.mode);
-  }
+  let cursor: string | null = null;
 
   if (opts.startingAfter) {
-    const { data: cursor } = await supabase
-      .from("payments")
-      .select("created_at")
-      .eq("id", opts.startingAfter)
-      .eq("merchant_id", merchantId)
-      .maybeSingle();
-    if (cursor?.created_at) {
-      query = query.lt("created_at", cursor.created_at);
-    }
+    const row = one(
+      await q<{ created_at: string }>`
+        select created_at from payments
+        where id = ${opts.startingAfter} and merchant_id = ${merchantId}
+      `,
+    );
+    cursor = row?.created_at ?? null;
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
+  let rows: Payment[];
+  if (opts.mode && cursor) {
+    rows = await q<Payment>`
+      select * from payments
+      where merchant_id = ${merchantId}
+        and mode = ${opts.mode}::api_key_mode
+        and created_at < ${cursor}::timestamptz
+      order by created_at desc
+      limit ${limit + 1}
+    `;
+  } else if (opts.mode) {
+    rows = await q<Payment>`
+      select * from payments
+      where merchant_id = ${merchantId} and mode = ${opts.mode}::api_key_mode
+      order by created_at desc
+      limit ${limit + 1}
+    `;
+  } else if (cursor) {
+    rows = await q<Payment>`
+      select * from payments
+      where merchant_id = ${merchantId} and created_at < ${cursor}::timestamptz
+      order by created_at desc
+      limit ${limit + 1}
+    `;
+  } else {
+    rows = await q<Payment>`
+      select * from payments
+      where merchant_id = ${merchantId}
+      order by created_at desc
+      limit ${limit + 1}
+    `;
+  }
 
-  const rows = (data ?? []) as Payment[];
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
 
