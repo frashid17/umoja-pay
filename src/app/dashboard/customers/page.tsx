@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { q } from "@/lib/db";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import { customersFromPayments, formatMoney } from "@/lib/merchant-finance";
 import type { Payment } from "@/lib/types";
 
@@ -12,20 +12,17 @@ export default async function CustomersPage() {
   const ctx = await getUserMerchant(user.id);
   if (!ctx) redirect("/onboarding");
 
-  const supabase = createServiceClient();
-  const { data: payments } = await supabase
-    .from("payments")
-    .select("id, phone, amount, currency, status, created_at, metadata, method")
-    .eq("merchant_id", ctx.merchant.id)
-    .order("created_at", { ascending: false })
-    .limit(2000);
+  const payments = await q<
+    Pick<Payment, "id" | "phone" | "amount" | "currency" | "status" | "created_at" | "metadata" | "method">
+  >`
+    select id, phone, amount, currency, status, created_at, metadata, method
+    from payments
+    where merchant_id = ${ctx.merchant.id}
+    order by created_at desc
+    limit 2000
+  `;
 
-  const customers = customersFromPayments(
-    (payments ?? []) as Pick<
-      Payment,
-      "id" | "phone" | "amount" | "currency" | "status" | "created_at" | "metadata" | "method"
-    >[],
-  );
+  const customers = customersFromPayments(payments);
 
   const withSuccess = customers.filter((c) => c.succeededCount > 0);
 
@@ -33,7 +30,7 @@ export default async function CustomersPage() {
     <AppShell
       variant="merchant"
       title="Customers"
-      subtitle="People who have paid on your platform — grouped by phone for mobile money, or as card payers."
+      subtitle="People who have paid on your platform, grouped by phone for mobile money, or as card payers."
     >
       <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card px-3 py-3 sm:px-4">
@@ -113,7 +110,7 @@ export default async function CustomersPage() {
                           dateStyle: "medium",
                           timeStyle: "short",
                         })
-                      : "—"}
+                      : "-"}
                   </dd>
                 </div>
               </dl>
