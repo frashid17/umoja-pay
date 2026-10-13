@@ -1,5 +1,7 @@
+import "server-only";
+
 import { dbMessage, one, q } from "@/lib/db";
-import { publicObjectUrl } from "@/lib/storage";
+import { publicObjectUrl } from "@/lib/storage/urls";
 import type { ApiKeyMode, CheckoutSession, CurrencyCode, Merchant } from "@/lib/types";
 
 export type CreateCheckoutSessionInput = {
