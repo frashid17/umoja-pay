@@ -2,35 +2,53 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { reviewKycAction } from "@/app/admin/kyc/actions";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
+import { q } from "@/lib/db";
+import { kycFileUrl } from "@/lib/storage";
+import type { KycSubmission } from "@/lib/types";
+import { getSessionUser, isPlatformAdmin } from "@/lib/session";
 
 export default async function AdminKycPage() {
   const user = await getSessionUser();
   if (!user) redirect("/sign-in");
   if (!(await isPlatformAdmin(user.id, user.email))) redirect("/dashboard");
 
-  const supabase = createServiceClient();
-  const { data: submissions } = await supabase
-    .from("kyc_submissions")
-    .select("*, merchants(name), kyc_documents(*)")
-    .eq("status", "pending")
-    .order("created_at", { ascending: true });
+  const submissions = await q<
+    KycSubmission & {
+      merchants: { name: string };
+      kyc_documents: { id: string; file_name: string; file_path: string }[] | null;
+    }
+  >`
+    select
+      s.*,
+      json_build_object('name', m.name) as merchants,
+      coalesce(
+        (
+          select json_agg(json_build_object(
+            'id', d.id,
+            'file_name', d.file_name,
+            'file_path', d.file_path
+          ))
+          from kyc_documents d
+          where d.submission_id = s.id
+        ),
+        '[]'::json
+      ) as kyc_documents
+    from kyc_submissions s
+    join merchants m on m.id = s.merchant_id
+    where s.status = 'pending'
+    order by s.created_at asc
+  `;
 
-  const submissionsWithUrls = await Promise.all(
-    (submissions ?? []).map(async (s) => {
-      const docs = Array.isArray(s.kyc_documents) ? s.kyc_documents : [];
-      const docsWithUrls = await Promise.all(
-        docs.map(async (d: { id: string; file_name: string; file_path: string }) => {
-          const { data } = await supabase.storage
-            .from("kyc")
-            .createSignedUrl(d.file_path, 60 * 30);
-          return { ...d, signed_url: data?.signedUrl ?? null };
-        }),
-      );
-      return { ...s, docsWithUrls };
-    }),
-  );
+  const submissionsWithUrls = submissions.map((s) => {
+    const docs = Array.isArray(s.kyc_documents) ? s.kyc_documents : [];
+    return {
+      ...s,
+      docsWithUrls: docs.map((d) => ({
+        ...d,
+        signed_url: kycFileUrl(d.file_path),
+      })),
+    };
+  });
 
   return (
     <AppShell
