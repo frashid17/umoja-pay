@@ -1,3 +1,5 @@
+import "server-only";
+
 import { Pool, type QueryResultRow } from "pg";
 
 let pool: Pool | undefined;
