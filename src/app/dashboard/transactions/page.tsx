@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { countOf, q } from "@/lib/db";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import { formatMoney } from "@/lib/merchant-finance";
 import type { Payment } from "@/lib/types";
 
@@ -13,39 +13,24 @@ export default async function TransactionsPage() {
   const ctx = await getUserMerchant(user.id);
   if (!ctx) redirect("/onboarding");
 
-  const supabase = createServiceClient();
-  const [{ data: payments }, { count: succeeded }, { count: pending }, { count: failed }] =
-    await Promise.all([
-      supabase
-        .from("payments")
-        .select("*")
-        .eq("merchant_id", ctx.merchant.id)
-        .order("created_at", { ascending: false })
-        .limit(100),
-      supabase
-        .from("payments")
-        .select("*", { count: "exact", head: true })
-        .eq("merchant_id", ctx.merchant.id)
-        .eq("status", "succeeded"),
-      supabase
-        .from("payments")
-        .select("*", { count: "exact", head: true })
-        .eq("merchant_id", ctx.merchant.id)
-        .in("status", ["pending", "processing"]),
-      supabase
-        .from("payments")
-        .select("*", { count: "exact", head: true })
-        .eq("merchant_id", ctx.merchant.id)
-        .eq("status", "failed"),
-    ]);
-
-  const rows = (payments ?? []) as Payment[];
+  const merchantId = ctx.merchant.id;
+  const [rows, succeeded, pending, failed] = await Promise.all([
+    q<Payment>`
+      select * from payments
+      where merchant_id = ${merchantId}
+      order by created_at desc
+      limit 100
+    `,
+    countOf`select count(*)::int as count from payments where merchant_id = ${merchantId} and status = 'succeeded'`,
+    countOf`select count(*)::int as count from payments where merchant_id = ${merchantId} and status::text = any(${["pending", "processing"]})`,
+    countOf`select count(*)::int as count from payments where merchant_id = ${merchantId} and status = 'failed'`,
+  ]);
 
   return (
     <AppShell
       variant="merchant"
       title="Transactions"
-      subtitle="Every payment on your account — test and live. Filter by status from the summary above."
+      subtitle="Every payment on your account: test and live. Filter by status from the summary above."
     >
       <div className="mb-6 grid grid-cols-3 gap-3 sm:mb-8">
         {[
@@ -125,7 +110,7 @@ export default async function TransactionsPage() {
                   <div>
                     <dt className="text-muted">Customer</dt>
                     <dd className="mt-0.5 truncate font-mono text-foreground">
-                      {p.phone ?? "—"}
+                      {p.phone ?? "-"}
                     </dd>
                   </div>
                   <div>
