@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { Logo } from "@/components/brand/logo";
-import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
+import { getSessionUser, isPlatformAdmin } from "@/lib/session";
 
 export default async function LegalLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
