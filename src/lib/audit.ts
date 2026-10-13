@@ -1,3 +1,5 @@
+import "server-only";
+
 import { q } from "@/lib/db";
 
 export async function writeAuditLog(input: {
