@@ -3,9 +3,10 @@
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Show, UserButton } from "@clerk/nextjs";
+import { AccountMenu } from "@/components/auth/account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Logo } from "@/components/brand/logo";
+import { authClient } from "@/lib/auth/client";
 
 function MenuIcon({ open }: { open: boolean }) {
   return (
@@ -29,8 +30,7 @@ function MenuIcon({ open }: { open: boolean }) {
   );
 }
 
-const linkClass =
-  "px-2 py-1.5 text-muted transition hover:text-foreground";
+const linkClass = "px-2 py-1.5 text-muted transition hover:text-foreground";
 
 export function SiteHeader({
   isAdmin,
@@ -43,6 +43,8 @@ export function SiteHeader({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const menuId = useId();
+  const { data: session, isPending } = authClient.useSession();
+  const signedIn = Boolean(session?.user);
 
   useEffect(() => {
     setOpen(false);
@@ -70,42 +72,42 @@ export function SiteHeader({
           <Logo variant="horizontal" />
         </Link>
 
-        {/* Desktop */}
         <nav className="hidden items-center gap-1 text-sm md:flex md:gap-2">
           <Link href="/docs" className={linkClass}>
             Docs
           </Link>
-          <Show when="signed-in">
-            <Link href="/dashboard" className={linkClass}>
-              Dashboard
-            </Link>
-            {isAdmin ? (
-              <Link href="/admin" className={linkClass}>
-                Admin
+          {!isPending && signedIn ? (
+            <>
+              <Link href="/dashboard" className={linkClass}>
+                Dashboard
               </Link>
-            ) : null}
-            <UserButton />
-          </Show>
-          <Show when="signed-out">
-            <Link href="/sign-in" className={linkClass}>
-              Log in
-            </Link>
-            <Link
-              href="/sign-up"
-              className="rounded-md bg-accent px-3 py-1.5 font-medium text-accent-foreground"
-            >
-              Start integrating
-            </Link>
-          </Show>
+              {isAdmin ? (
+                <Link href="/admin" className={linkClass}>
+                  Admin
+                </Link>
+              ) : null}
+              <AccountMenu />
+            </>
+          ) : null}
+          {!isPending && !signedIn ? (
+            <>
+              <Link href="/sign-in" className={linkClass}>
+                Log in
+              </Link>
+              <Link
+                href="/sign-up"
+                className="rounded-md bg-accent px-3 py-1.5 font-medium text-accent-foreground"
+              >
+                Start integrating
+              </Link>
+            </>
+          ) : null}
           <ThemeToggle />
         </nav>
 
-        {/* Mobile */}
         <div className="flex items-center gap-1.5 md:hidden">
           <ThemeToggle />
-          <Show when="signed-in">
-            <UserButton />
-          </Show>
+          {!isPending && signedIn ? <AccountMenu /> : null}
           <button
             type="button"
             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-foreground transition hover:border-accent hover:text-accent"
@@ -127,36 +129,40 @@ export function SiteHeader({
           <Link href="/docs" className="rounded-md px-3 py-2.5 text-foreground hover:bg-card">
             Docs
           </Link>
-          <Show when="signed-in">
-            <Link
-              href="/dashboard"
-              className="rounded-md px-3 py-2.5 text-foreground hover:bg-card"
-            >
-              Dashboard
-            </Link>
-            {isAdmin ? (
+          {!isPending && signedIn ? (
+            <>
               <Link
-                href="/admin"
+                href="/dashboard"
                 className="rounded-md px-3 py-2.5 text-foreground hover:bg-card"
               >
-                Admin
+                Dashboard
               </Link>
-            ) : null}
-          </Show>
-          <Show when="signed-out">
-            <Link
-              href="/sign-in"
-              className="rounded-md px-3 py-2.5 text-foreground hover:bg-card"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/sign-up"
-              className="mt-1 rounded-md bg-accent px-3 py-2.5 text-center font-medium text-accent-foreground"
-            >
-              Start integrating
-            </Link>
-          </Show>
+              {isAdmin ? (
+                <Link
+                  href="/admin"
+                  className="rounded-md px-3 py-2.5 text-foreground hover:bg-card"
+                >
+                  Admin
+                </Link>
+              ) : null}
+            </>
+          ) : null}
+          {!isPending && !signedIn ? (
+            <>
+              <Link
+                href="/sign-in"
+                className="rounded-md px-3 py-2.5 text-foreground hover:bg-card"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/sign-up"
+                className="mt-1 rounded-md bg-accent px-3 py-2.5 text-center font-medium text-accent-foreground"
+              >
+                Start integrating
+              </Link>
+            </>
+          ) : null}
         </nav>
       </div>
     </header>
