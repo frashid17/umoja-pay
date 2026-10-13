@@ -1,5 +1,5 @@
 import { DocsShell } from "@/components/docs-shell";
-import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
+import { getSessionUser, isPlatformAdmin } from "@/lib/session";
 
 export default async function DocsLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
