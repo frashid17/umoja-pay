@@ -2,9 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
-import type { Settlement, SettlementAccount } from "@/lib/types";
+import { q } from "@/lib/db";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
+import type { Payment, Settlement, SettlementAccount } from "@/lib/types";
 
 function formatMoney(amount: number, currency: string) {
   return `${(amount / 100).toLocaleString(undefined, {
@@ -24,32 +24,25 @@ export default async function SettlementsPage() {
   const ctx = await getUserMerchant(user.id);
   if (!ctx) redirect("/onboarding");
 
-  const supabase = createServiceClient();
-  const [{ data: settlements }, { data: account }, { data: liveSucceeded }] = await Promise.all([
-    supabase
-      .from("settlements")
-      .select("*")
-      .eq("merchant_id", ctx.merchant.id)
-      .order("created_at", { ascending: false })
-      .limit(50),
-    supabase
-      .from("settlement_accounts")
-      .select("*")
-      .eq("merchant_id", ctx.merchant.id)
-      .maybeSingle(),
-    supabase
-      .from("payments")
-      .select("amount, currency")
-      .eq("merchant_id", ctx.merchant.id)
-      .eq("mode", "live")
-      .eq("status", "succeeded"),
+  const merchantId = ctx.merchant.id;
+  const [rows, destination, liveSucceeded] = await Promise.all([
+    q<Settlement>`
+      select * from settlements
+      where merchant_id = ${merchantId}
+      order by created_at desc
+      limit 50
+    `,
+    q<SettlementAccount>`
+      select * from settlement_accounts where merchant_id = ${merchantId}
+    `.then((accounts) => accounts[0] ?? null),
+    q<Pick<Payment, "amount" | "currency">>`
+      select amount, currency from payments
+      where merchant_id = ${merchantId} and mode = 'live' and status = 'succeeded'
+    `,
   ]);
 
-  const rows = (settlements ?? []) as Settlement[];
-  const destination = account as SettlementAccount | null;
-
   const collectedByCurrency = new Map<string, number>();
-  for (const p of liveSucceeded ?? []) {
+  for (const p of liveSucceeded) {
     collectedByCurrency.set(p.currency, (collectedByCurrency.get(p.currency) ?? 0) + p.amount);
   }
 
