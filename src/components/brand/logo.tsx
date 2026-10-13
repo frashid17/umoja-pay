@@ -1,5 +1,5 @@
 /**
- * Umoja Pay mark — two linked figures forming a U
+ * Umoja Pay mark: two linked figures forming a U
  * (deep + mint, signal head). Matched to brand sheet.
  * Theme tokens keep the left figure visible on dark UI.
  */
