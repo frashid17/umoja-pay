@@ -2,7 +2,7 @@ import "server-only";
 
 import { isUniqueViolation, one, q } from "@/lib/db";
 import type { ProductWithPrices } from "@/lib/products/format";
-import { publicObjectUrl } from "@/lib/storage";
+import { publicObjectUrl } from "@/lib/storage/urls";
 import type {
   ApiKeyMode,
   CurrencyCode,
