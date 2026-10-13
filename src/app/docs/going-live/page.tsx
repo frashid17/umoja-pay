@@ -67,7 +67,7 @@ export default function GoingLivePage() {
           <li>Never log full API secrets.</li>
           <li>Gate live keys behind environment variables per deploy.</li>
           <li>
-            Keep sandbox and live merchant data conceptually separate — do not reuse test payment ids
+            Keep sandbox and live merchant data conceptually separate. Do not reuse test payment ids
             in production support workflows.
           </li>
           <li>
