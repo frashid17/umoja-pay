@@ -235,13 +235,13 @@ export function SettingsForms({
       <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
         <h2 className="font-display text-xl font-bold text-foreground">Team & access</h2>
         <p className="mt-1 text-sm text-muted">
-          Your Clerk account is the owner identity for this merchant. Invite more seats in a later
+          Your account is the owner identity for this merchant. Invite more seats in a later
           release.
         </p>
         <dl className="mt-6 grid gap-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-[11px] uppercase tracking-[0.14em] text-muted">Signed-in email</dt>
-            <dd className="mt-1 font-medium text-foreground">{userEmail ?? "—"}</dd>
+            <dd className="mt-1 font-medium text-foreground">{userEmail ?? "-"}</dd>
           </div>
           <div>
             <dt className="text-[11px] uppercase tracking-[0.14em] text-muted">Role</dt>
