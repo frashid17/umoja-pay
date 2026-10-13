@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { upsertWebhookEndpoint } from "@/lib/webhooks";
 import { writeAuditLog } from "@/lib/audit";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import type { ApiKeyMode } from "@/lib/types";
 
 export async function saveWebhookAction(formData: FormData): Promise<{ signingSecret?: string; error?: string }> {
