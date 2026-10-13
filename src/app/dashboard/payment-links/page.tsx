@@ -3,7 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { PaymentLinksDashboard } from "@/app/dashboard/payment-links/payment-links-dashboard";
 import { getAppOrigin } from "@/lib/app-url";
 import { merchantLogoPublicUrl } from "@/lib/checkout/sessions";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import { listPaymentLinks, paymentLinkImagePublicUrl } from "@/lib/payment-links";
 
 export default async function PaymentLinksPage() {
