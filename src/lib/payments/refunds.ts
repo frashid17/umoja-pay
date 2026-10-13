@@ -1,5 +1,5 @@
-import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
+import { one, q } from "@/lib/db";
 import { getAdapterForMethod } from "@/lib/payments/adapter";
 import { dispatchRefundWebhook } from "@/lib/webhooks";
 import type { Payment, PaymentStatus, Refund } from "@/lib/types";
@@ -10,22 +10,18 @@ async function refundedAmountForPayment(
   paymentId: string,
   opts?: { excludeRefundId?: string; statuses?: Refund["status"][] },
 ) {
-  const supabase = createServiceClient();
   const statuses = opts?.statuses ?? ["pending", "processing", "succeeded"];
-  const { data, error } = await supabase
-    .from("refunds")
-    .select("id, amount, status")
-    .eq("payment_id", paymentId)
-    .in("status", statuses);
-
-  if (error) throw error;
-  return (data ?? [])
+  const rows = await q<Pick<Refund, "id" | "amount" | "status">>`
+    select id, amount, status from refunds
+    where payment_id = ${paymentId}
+      and status::text = any(${statuses})
+  `;
+  return rows
     .filter((r) => r.id !== opts?.excludeRefundId)
     .reduce((sum, r) => sum + r.amount, 0);
 }
 
 async function syncPaymentRefundStatus(payment: Payment) {
-  const supabase = createServiceClient();
   const succeededRefunded = await refundedAmountForPayment(payment.id, {
     statuses: ["succeeded"],
   });
@@ -43,15 +39,15 @@ async function syncPaymentRefundStatus(payment: Payment) {
 
   if (next === payment.status) return payment;
 
-  const { data, error } = await supabase
-    .from("payments")
-    .update({ status: next })
-    .eq("id", payment.id)
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return data as Payment;
+  const row = one(
+    await q<Payment>`
+      update payments set status = ${next}::payment_status
+      where id = ${payment.id}
+      returning *
+    `,
+  );
+  if (!row) throw new Error("Failed to update payment refund status");
+  return row;
 }
 
 export type CreateRefundInput = {
@@ -64,18 +60,13 @@ export type CreateRefundInput = {
 };
 
 export async function createRefund(input: CreateRefundInput) {
-  const supabase = createServiceClient();
-  const { data: paymentRow, error: payErr } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("id", input.paymentId)
-    .eq("merchant_id", input.merchantId)
-    .maybeSingle();
-
-  if (payErr) throw payErr;
-  if (!paymentRow) throw new Error("Payment not found");
-
-  const payment = paymentRow as Payment;
+  const payment = one(
+    await q<Payment>`
+      select * from payments
+      where id = ${input.paymentId} and merchant_id = ${input.merchantId}
+    `,
+  );
+  if (!payment) throw new Error("Payment not found");
   if (!REFUNDABLE.includes(payment.status)) {
     throw new Error("Only succeeded payments can be refunded");
   }
@@ -91,66 +82,66 @@ export async function createRefund(input: CreateRefundInput) {
     );
   }
 
-  const { data: inserted, error: insertErr } = await supabase
-    .from("refunds")
-    .insert({
-      merchant_id: payment.merchant_id,
-      payment_id: payment.id,
-      amount: Math.round(input.amount),
-      currency: payment.currency,
-      method: payment.method,
-      status: "processing",
-      mode: payment.mode,
-      reason: input.reason?.trim() || null,
-      created_by: input.actorUserId ?? null,
-      metadata: {
-        destination:
-          payment.method === "card"
-            ? {
-                type: "card",
-                last4:
-                  typeof payment.metadata?.card_last4 === "string"
-                    ? payment.metadata.card_last4
-                    : null,
-              }
-            : { type: "mobile_money", phone: payment.phone },
-      },
-    })
-    .select("*")
-    .single();
+  const metadata = {
+    destination:
+      payment.method === "card"
+        ? {
+            type: "card",
+            last4: typeof payment.metadata?.card_last4 === "string" ? payment.metadata.card_last4 : null,
+          }
+        : { type: "mobile_money", phone: payment.phone },
+  };
 
-  if (insertErr) throw insertErr;
-  const refund = inserted as Refund;
+  const inserted = one(
+    await q<Refund>`
+      insert into refunds (
+        merchant_id, payment_id, amount, currency, method, status, mode, reason,
+        created_by, metadata
+      )
+      values (
+        ${payment.merchant_id},
+        ${payment.id},
+        ${Math.round(input.amount)},
+        ${payment.currency}::currency_code,
+        ${payment.method}::payment_method,
+        'processing',
+        ${payment.mode}::api_key_mode,
+        ${input.reason?.trim() || null},
+        ${input.actorUserId ?? null},
+        ${JSON.stringify(metadata)}::jsonb
+      )
+      returning *
+    `,
+  );
+  if (!inserted) throw new Error("Failed to create refund");
 
   const adapter = getAdapterForMethod(payment.method, payment.mode);
   const cardLast4 =
     typeof payment.metadata?.card_last4 === "string" ? payment.metadata.card_last4 : null;
 
   const result = await adapter.refund({
-    refundId: refund.id,
+    refundId: inserted.id,
     paymentId: payment.id,
-    amount: refund.amount,
-    currency: refund.currency,
-    method: refund.method,
+    amount: inserted.amount,
+    currency: inserted.currency,
+    method: inserted.method,
     phone: payment.phone,
     cardLast4,
     originalProviderRef: payment.provider_ref,
     sandboxOutcome: payment.mode === "test" ? input.sandboxOutcome : undefined,
   });
 
-  const { data: updated, error: updateErr } = await supabase
-    .from("refunds")
-    .update({
-      status: result.status,
-      provider_ref: result.providerRef,
-      failure_reason: result.failureReason ?? null,
-    })
-    .eq("id", refund.id)
-    .select("*")
-    .single();
-
-  if (updateErr) throw updateErr;
-  const finalRefund = updated as Refund;
+  const updated = one(
+    await q<Refund>`
+      update refunds
+      set status = ${result.status}::refund_status,
+          provider_ref = ${result.providerRef},
+          failure_reason = ${result.failureReason ?? null}
+      where id = ${inserted.id}
+      returning *
+    `,
+  );
+  if (!updated) throw new Error("Failed to update refund");
 
   await syncPaymentRefundStatus(payment);
 
@@ -159,19 +150,18 @@ export async function createRefund(input: CreateRefundInput) {
     actorUserId: input.actorUserId,
     action: "refund.created",
     entityType: "refund",
-    entityId: finalRefund.id,
+    entityId: updated.id,
     metadata: {
       payment_id: payment.id,
-      amount: finalRefund.amount,
-      currency: finalRefund.currency,
-      method: finalRefund.method,
-      status: finalRefund.status,
+      amount: updated.amount,
+      currency: updated.currency,
+      method: updated.method,
+      status: updated.status,
     },
   });
 
-  void dispatchRefundWebhook(finalRefund);
-
-  return finalRefund;
+  void dispatchRefundWebhook(updated);
+  return updated;
 }
 
 export type UpdateRefundInput = {
@@ -183,47 +173,44 @@ export type UpdateRefundInput = {
 };
 
 export async function updateRefund(input: UpdateRefundInput) {
-  const supabase = createServiceClient();
-  const { data: existing, error } = await supabase
-    .from("refunds")
-    .select("*")
-    .eq("id", input.refundId)
-    .eq("merchant_id", input.merchantId)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!existing) throw new Error("Refund not found");
-  const refund = existing as Refund;
-
+  const refund = one(
+    await q<Refund>`
+      select * from refunds
+      where id = ${input.refundId} and merchant_id = ${input.merchantId}
+    `,
+  );
+  if (!refund) throw new Error("Refund not found");
   if (refund.status === "canceled") {
     throw new Error("Canceled refunds cannot be edited");
   }
 
-  const patch: Record<string, unknown> = {};
+  let nextReason = refund.reason;
+  let nextAmount = refund.amount;
+  let changed = false;
 
   if (input.reason !== undefined) {
-    patch.reason = input.reason?.trim() || null;
+    nextReason = input.reason?.trim() || null;
+    changed = true;
   }
 
   if (input.amount !== undefined && input.amount !== refund.amount) {
     if (refund.status === "succeeded") {
-      throw new Error("Succeeded refunds cannot change amount — create another partial refund");
+      throw new Error("Succeeded refunds cannot change amount. Create another partial refund");
     }
     if (refund.status === "failed") {
-      throw new Error("Failed refunds cannot change amount — create a new refund");
+      throw new Error("Failed refunds cannot change amount. Create a new refund");
     }
     if (!Number.isFinite(input.amount) || input.amount < 1) {
       throw new Error("Refund amount must be a positive integer (minor units)");
     }
 
-    const { data: paymentRow, error: payErr } = await supabase
-      .from("payments")
-      .select("*")
-      .eq("id", refund.payment_id)
-      .eq("merchant_id", input.merchantId)
-      .single();
-    if (payErr) throw payErr;
-    const payment = paymentRow as Payment;
+    const payment = one(
+      await q<Payment>`
+        select * from payments
+        where id = ${refund.payment_id} and merchant_id = ${input.merchantId}
+      `,
+    );
+    if (!payment) throw new Error("Payment not found");
 
     const already = await refundedAmountForPayment(payment.id, {
       excludeRefundId: refund.id,
@@ -234,31 +221,35 @@ export async function updateRefund(input: UpdateRefundInput) {
         `Refund exceeds remaining refundable amount (${remaining} ${payment.currency} left)`,
       );
     }
-    patch.amount = Math.round(input.amount);
+    nextAmount = Math.round(input.amount);
+    changed = true;
   }
 
-  if (Object.keys(patch).length === 0) return refund;
+  if (!changed) return refund;
 
-  const { data: updated, error: updateErr } = await supabase
-    .from("refunds")
-    .update(patch)
-    .eq("id", refund.id)
-    .select("*")
-    .single();
-
-  if (updateErr) throw updateErr;
-  const finalRefund = updated as Refund;
+  const updated = one(
+    await q<Refund>`
+      update refunds
+      set reason = ${nextReason}, amount = ${nextAmount}
+      where id = ${refund.id}
+      returning *
+    `,
+  );
+  if (!updated) throw new Error("Failed to update refund");
 
   await writeAuditLog({
     merchantId: input.merchantId,
     actorUserId: input.actorUserId,
     action: "refund.updated",
     entityType: "refund",
-    entityId: finalRefund.id,
-    metadata: patch,
+    entityId: updated.id,
+    metadata: {
+      ...(input.reason !== undefined ? { reason: nextReason } : {}),
+      ...(nextAmount !== refund.amount ? { amount: nextAmount } : {}),
+    },
   });
 
-  return finalRefund;
+  return updated;
 }
 
 export async function cancelRefund(input: {
@@ -266,86 +257,68 @@ export async function cancelRefund(input: {
   refundId: string;
   actorUserId?: string | null;
 }) {
-  const supabase = createServiceClient();
-  const { data: existing, error } = await supabase
-    .from("refunds")
-    .select("*")
-    .eq("id", input.refundId)
-    .eq("merchant_id", input.merchantId)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!existing) throw new Error("Refund not found");
-  const refund = existing as Refund;
-
+  const refund = one(
+    await q<Refund>`
+      select * from refunds
+      where id = ${input.refundId} and merchant_id = ${input.merchantId}
+    `,
+  );
+  if (!refund) throw new Error("Refund not found");
   if (refund.status === "succeeded") {
     throw new Error("Succeeded refunds cannot be canceled");
   }
   if (refund.status === "canceled") return refund;
 
-  const { data: updated, error: updateErr } = await supabase
-    .from("refunds")
-    .update({ status: "canceled" })
-    .eq("id", refund.id)
-    .select("*")
-    .single();
+  const updated = one(
+    await q<Refund>`
+      update refunds set status = 'canceled'
+      where id = ${refund.id}
+      returning *
+    `,
+  );
+  if (!updated) throw new Error("Failed to cancel refund");
 
-  if (updateErr) throw updateErr;
-  const finalRefund = updated as Refund;
-
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("id", refund.payment_id)
-    .maybeSingle();
-  if (payment) await syncPaymentRefundStatus(payment as Payment);
+  const payment = one(await q<Payment>`select * from payments where id = ${refund.payment_id}`);
+  if (payment) await syncPaymentRefundStatus(payment);
 
   await writeAuditLog({
     merchantId: input.merchantId,
     actorUserId: input.actorUserId,
     action: "refund.canceled",
     entityType: "refund",
-    entityId: finalRefund.id,
+    entityId: updated.id,
     metadata: {},
   });
 
-  return finalRefund;
+  return updated;
 }
 
 export async function listRefunds(merchantId: string, limit = 50) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("refunds")
-    .select("*")
-    .eq("merchant_id", merchantId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-  return (data ?? []) as Refund[];
+  return q<Refund>`
+    select * from refunds
+    where merchant_id = ${merchantId}
+    order by created_at desc
+    limit ${limit}
+  `;
 }
 
 export async function getRefundableRemaining(paymentId: string, merchantId: string) {
-  const supabase = createServiceClient();
-  const { data: payment, error } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("id", paymentId)
-    .eq("merchant_id", merchantId)
-    .maybeSingle();
-
-  if (error) throw error;
+  const payment = one(
+    await q<Payment>`
+      select * from payments
+      where id = ${paymentId} and merchant_id = ${merchantId}
+    `,
+  );
   if (!payment) return null;
 
-  const p = payment as Payment;
-  if (!REFUNDABLE.includes(p.status) && p.status !== "refunded") {
-    return { payment: p, remaining: 0, refunded: 0 };
+  if (!REFUNDABLE.includes(payment.status) && payment.status !== "refunded") {
+    return { payment, remaining: 0, refunded: 0 };
   }
 
-  const refunded = await refundedAmountForPayment(p.id);
+  const refunded = await refundedAmountForPayment(payment.id);
   return {
-    payment: p,
-    remaining: Math.max(0, p.amount - refunded),
+    payment,
+    remaining: Math.max(0, payment.amount - refunded),
     refunded,
   };
 }
