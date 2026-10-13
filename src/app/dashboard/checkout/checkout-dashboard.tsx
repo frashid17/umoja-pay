@@ -104,7 +104,7 @@ export function CheckoutDashboard({
       <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
         <h2 className="font-display text-xl font-bold text-foreground">Preview checkout</h2>
         <p className="mt-1 text-sm text-muted">
-          See exactly what customers see — mobile money and card, with your logo and accent.
+          See exactly what customers see: mobile money and card, with your logo and accent.
         </p>
         <form action={openMerchantCheckoutPreview} className="mt-5">
           <button
