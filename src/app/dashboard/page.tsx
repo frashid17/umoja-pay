@@ -2,9 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
-import type { MerchantStatus } from "@/lib/types";
+import { countOf, q } from "@/lib/db";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
+import type { ApiKey, MerchantStatus, Payment, WebhookEndpoint } from "@/lib/types";
 
 const countryLabels: Record<string, string> = {
   KE: "Kenya",
@@ -49,52 +49,29 @@ export default async function DashboardPage() {
   const ctx = await getUserMerchant(user.id);
   if (!ctx) redirect("/onboarding");
 
-  const supabase = createServiceClient();
+  const merchantId = ctx.merchant.id;
   const [
-    { count: paymentCount },
-    { data: recentPayments },
-    { count: keyCount },
-    { count: succeededCount },
-    { count: failedCount },
-    { data: webhooks },
-    { data: keysPreview },
+    paymentCount,
+    recentPayments,
+    keyCount,
+    succeededCount,
+    failedCount,
+    webhooks,
+    keysPreview,
   ] = await Promise.all([
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("merchant_id", ctx.merchant.id),
-    supabase
-      .from("payments")
-      .select("*")
-      .eq("merchant_id", ctx.merchant.id)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase
-      .from("api_keys")
-      .select("*", { count: "exact", head: true })
-      .eq("merchant_id", ctx.merchant.id)
-      .is("revoked_at", null),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("merchant_id", ctx.merchant.id)
-      .eq("status", "succeeded"),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("merchant_id", ctx.merchant.id)
-      .eq("status", "failed"),
-    supabase
-      .from("webhook_endpoints")
-      .select("*")
-      .eq("merchant_id", ctx.merchant.id),
-    supabase
-      .from("api_keys")
-      .select("id, name, prefix, mode, last_used_at, revoked_at, created_at")
-      .eq("merchant_id", ctx.merchant.id)
-      .is("revoked_at", null)
-      .order("created_at", { ascending: false })
-      .limit(3),
+    countOf`select count(*)::int as count from payments where merchant_id = ${merchantId}`,
+    q<Payment>`select * from payments where merchant_id = ${merchantId} order by created_at desc limit 6`,
+    countOf`select count(*)::int as count from api_keys where merchant_id = ${merchantId} and revoked_at is null`,
+    countOf`select count(*)::int as count from payments where merchant_id = ${merchantId} and status = 'succeeded'`,
+    countOf`select count(*)::int as count from payments where merchant_id = ${merchantId} and status = 'failed'`,
+    q<WebhookEndpoint>`select * from webhook_endpoints where merchant_id = ${merchantId}`,
+    q<Pick<ApiKey, "id" | "name" | "prefix" | "mode" | "last_used_at" | "revoked_at" | "created_at">>`
+      select id, name, prefix, mode, last_used_at, revoked_at, created_at
+      from api_keys
+      where merchant_id = ${merchantId} and revoked_at is null
+      order by created_at desc
+      limit 3
+    `,
   ]);
 
   const step = nextStep(ctx.merchant.status);
@@ -317,7 +294,7 @@ export default async function DashboardPage() {
             <p className="font-display text-xl font-semibold text-foreground">No payments yet</p>
             <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
               Create a test key, then fire the curl snippet above. Phone numbers ending in 0 fail in
-              sandbox — everything else succeeds.
+              sandbox, everything else succeeds.
             </p>
             <Link
               href="/dashboard/sandbox"
