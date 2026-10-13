@@ -11,7 +11,7 @@ export default function MobileMoneyPage() {
       <DocsPageHeader
         eyebrow="Learn"
         title="What's mobile money?"
-        lead="Mobile money is a wallet tied to a phone number. Customers authorize payments from their handset — there is no card network in the middle."
+        lead="Mobile money is a wallet tied to a phone number. Customers authorize payments from their handset. There is no card network in the middle."
       />
 
       <div className="space-y-4 text-[15px] leading-relaxed text-muted">
