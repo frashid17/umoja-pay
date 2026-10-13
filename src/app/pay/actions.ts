@@ -16,7 +16,7 @@ export async function startPaymentLinkCheckout(formData: FormData) {
     merchantId: link.merchant_id,
     amount: link.amount,
     currency: link.currency,
-    description: link.product_name + (link.description ? ` — ${link.description}` : ""),
+    description: link.product_name + (link.description ? ` - ${link.description}` : ""),
     reference: `plink_${link.slug}`,
     mode: link.mode,
     isPreview: false,
