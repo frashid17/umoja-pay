@@ -3,8 +3,9 @@ import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { openAdminCheckoutPreview } from "@/app/dashboard/checkout/actions";
 import { merchantLogoPublicUrl } from "@/lib/checkout/sessions";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
+import { countOf, one, q } from "@/lib/db";
+import type { KycSubmission, Merchant, Payment } from "@/lib/types";
+import { getSessionUser, isPlatformAdmin } from "@/lib/session";
 
 export default async function AdminMerchantDetailPage({
   params,
@@ -16,31 +17,26 @@ export default async function AdminMerchantDetailPage({
   if (!(await isPlatformAdmin(user.id, user.email))) redirect("/dashboard");
 
   const { id } = await params;
-  const supabase = createServiceClient();
 
-  const { data: merchant } = await supabase.from("merchants").select("*").eq("id", id).maybeSingle();
+  const merchant = one(await q<Merchant>`select * from merchants where id = ${id}`);
   if (!merchant) notFound();
 
   const logoUrl = merchantLogoPublicUrl(merchant.logo_path);
 
-  const [{ count: keyCount }, { data: payments }, { data: kyc }] = await Promise.all([
-    supabase
-      .from("api_keys")
-      .select("*", { count: "exact", head: true })
-      .eq("merchant_id", id)
-      .is("revoked_at", null),
-    supabase
-      .from("payments")
-      .select("*")
-      .eq("merchant_id", id)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("kyc_submissions")
-      .select("*")
-      .eq("merchant_id", id)
-      .order("created_at", { ascending: false })
-      .limit(5),
+  const [keyCount, payments, kyc] = await Promise.all([
+    countOf`select count(*)::int as count from api_keys where merchant_id = ${id} and revoked_at is null`,
+    q<Payment>`
+      select * from payments
+      where merchant_id = ${id}
+      order by created_at desc
+      limit 20
+    `,
+    q<KycSubmission>`
+      select * from kyc_submissions
+      where merchant_id = ${id}
+      order by created_at desc
+      limit 5
+    `,
   ]);
 
   return (
@@ -68,7 +64,7 @@ export default async function AdminMerchantDetailPage({
           Preview their checkout
         </button>
         <p className="mt-2 text-xs text-muted">
-          Opens a preview session with this merchant’s logo and branding — no charge.
+          Opens a preview session with this merchant’s logo and branding, no charge.
         </p>
       </form>
 
