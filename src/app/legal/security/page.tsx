@@ -16,7 +16,7 @@ export default function SecurityPage() {
         <h2 className="font-display text-xl font-semibold text-foreground">Controls</h2>
         <ul className="list-disc space-y-2 pl-5">
           <li>API secrets are hashed at rest and shown once on creation.</li>
-          <li>Dashboard authentication is handled by a dedicated identity provider (Clerk).</li>
+          <li>Dashboard authentication uses secure session cookies managed by the platform.</li>
           <li>Tenant data is scoped per merchant; database policies enforce isolation.</li>
           <li>Webhook deliveries are signed (HMAC) so you can verify authenticity.</li>
           <li>Document generation and sensitive actions are rate-limited and audit-logged.</li>
@@ -25,7 +25,7 @@ export default function SecurityPage() {
 
         <h2 className="font-display text-xl font-semibold text-foreground">Your responsibilities</h2>
         <ul className="list-disc space-y-2 pl-5">
-          <li>Store API keys only on trusted servers — never in mobile apps or frontends.</li>
+          <li>Store API keys only on trusted servers, never in mobile apps or frontends.</li>
           <li>Verify webhook signatures before acting on events.</li>
           <li>Rotate keys if you suspect compromise.</li>
           <li>Use HTTPS for production webhook endpoints.</li>
