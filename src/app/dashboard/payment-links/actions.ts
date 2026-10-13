@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
 import { getAppOrigin } from "@/lib/app-url";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
+import { dbMessage } from "@/lib/db";
 import { archivePaymentLink, createPaymentLink } from "@/lib/payment-links";
+import { putObject } from "@/lib/storage";
 import type { CurrencyCode } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 
@@ -47,9 +48,7 @@ export async function createPaymentLinkAction(
     return { error: "Live payment links require an active merchant (complete KYC first)" };
   }
 
-  const supabase = createServiceClient();
   let imagePath: string | null = null;
-
   const file = formData.get("image");
   if (file instanceof File && file.size > 0) {
     if (file.size > 3 * 1024 * 1024) return { error: "Image must be under 3MB" };
@@ -60,10 +59,16 @@ export async function createPaymentLinkAction(
     const id = crypto.randomUUID();
     imagePath = `${ctx.merchant.id}/${id}.${ext}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("payment-link-images")
-      .upload(imagePath, file, { upsert: false, contentType: file.type });
-    if (uploadError) return { error: uploadError.message };
+    try {
+      await putObject({
+        bucket: "payment-link-images",
+        path: imagePath,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        contentType: file.type,
+      });
+    } catch (error) {
+      return { error: dbMessage(error) };
+    }
   }
 
   try {
