@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { CreateRefundForm, EditRefundForm } from "@/components/refunds/refund-forms";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { q } from "@/lib/db";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import { formatMoney } from "@/lib/merchant-finance";
 import { getRefundableRemaining, listRefunds } from "@/lib/payments/refunds";
 import type { Payment, Refund } from "@/lib/types";
@@ -34,26 +34,23 @@ export default async function RefundsPage({
     }
   }
 
-  const supabase = createServiceClient();
   const paymentIds = [...new Set(refunds.map((r) => r.payment_id))];
   const paymentMap = new Map<string, Payment>();
   if (paymentIds.length > 0) {
-    const { data } = await supabase
-      .from("payments")
-      .select("*")
-      .eq("merchant_id", ctx.merchant.id)
-      .in("id", paymentIds);
-    for (const p of (data ?? []) as Payment[]) paymentMap.set(p.id, p);
+    const data = await q<Payment>`
+      select * from payments
+      where merchant_id = ${ctx.merchant.id} and id = any(${paymentIds}::uuid[])
+    `;
+    for (const p of data) paymentMap.set(p.id, p);
   }
 
-  // Refundable payments for quick pick
-  const { data: refundablePayments } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("merchant_id", ctx.merchant.id)
-    .in("status", ["succeeded", "partially_refunded"])
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const refundablePayments = await q<Payment>`
+    select * from payments
+    where merchant_id = ${ctx.merchant.id}
+      and status::text = any(${["succeeded", "partially_refunded"]})
+    order by created_at desc
+    limit 20
+  `;
 
   return (
     <AppShell
@@ -129,7 +126,7 @@ export default async function RefundsPage({
                         ? (r.metadata.destination as { last4: string }).last4
                         : "****"
                     }`
-                  : `MoMo ${payment?.phone ?? "—"}`;
+                  : `MoMo ${payment?.phone ?? "-"}`;
 
               return (
                 <li key={r.id} className="rounded-xl border border-border bg-card px-4 py-4 text-sm">
