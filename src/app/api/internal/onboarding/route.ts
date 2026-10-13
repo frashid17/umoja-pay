@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeAuditLog } from "@/lib/audit";
-import { ensurePlatformAdmin, getSessionUser } from "@/lib/auth/session";
-import { createServiceClient } from "@/lib/supabase/admin";
+import { ensurePlatformAdmin, getSessionUser } from "@/lib/session";
+import { dbMessage, one, q } from "@/lib/db";
+import type { Merchant } from "@/lib/types";
 
 const schema = z.object({
   businessName: z.string().min(2).max(120),
@@ -28,45 +29,46 @@ export async function POST(request: Request) {
     );
   }
 
-  const supabase = createServiceClient();
-
-  const { data: existing } = await supabase
-    .from("merchant_members")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
+  const existing = one(
+    await q<{ id: string }>`
+      select id from merchant_members where user_id = ${user.id}
+    `,
+  );
   if (existing) {
     return NextResponse.json({ ok: true, existing: true });
   }
 
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .insert({
-      name: body.data.businessName,
-      country: body.data.country,
-      status: "draft",
-      support_email: user.email ?? null,
-    })
-    .select("*")
-    .single();
-
-  if (merchantError || !merchant) {
+  let merchant: Merchant;
+  try {
+    const row = one(
+      await q<Merchant>`
+        insert into merchants (name, country, status, support_email)
+        values (
+          ${body.data.businessName},
+          ${body.data.country}::country_code,
+          'draft',
+          ${user.email ?? null}
+        )
+        returning *
+      `,
+    );
+    if (!row) throw new Error("Failed");
+    merchant = row;
+  } catch (error) {
     return NextResponse.json(
-      { error: { code: "create_failed", message: merchantError?.message ?? "Failed" } },
+      { error: { code: "create_failed", message: dbMessage(error) } },
       { status: 500 },
     );
   }
 
-  const { error: memberError } = await supabase.from("merchant_members").insert({
-    merchant_id: merchant.id,
-    user_id: user.id,
-    role: "owner",
-  });
-
-  if (memberError) {
+  try {
+    await q`
+      insert into merchant_members (merchant_id, user_id, role)
+      values (${merchant.id}, ${user.id}, 'owner')
+    `;
+  } catch (error) {
     return NextResponse.json(
-      { error: { code: "create_failed", message: memberError.message } },
+      { error: { code: "create_failed", message: dbMessage(error) } },
       { status: 500 },
     );
   }
