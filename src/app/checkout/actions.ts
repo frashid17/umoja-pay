@@ -85,7 +85,7 @@ export async function completeCheckoutAction(formData: FormData): Promise<Checko
       };
     }
 
-    // Card via Paystack Popup / redirect — no PAN on our servers
+    // Card via Paystack Popup / redirect, no PAN on our servers
     if (usingPaystack) {
       if (!email || !email.includes("@")) {
         return { ok: false, error: "Enter a valid email for card receipts" };
