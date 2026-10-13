@@ -59,7 +59,7 @@ export default function RetrievePaymentReferencePage() {
           <Link href="/docs/reference/payment" className="font-medium text-accent hover:underline">
             Payment
           </Link>{" "}
-          model for field details — terminal statuses are <InlineCode>succeeded</InlineCode>,{" "}
+          model for field details: terminal statuses are <InlineCode>succeeded</InlineCode>,{" "}
           <InlineCode>failed</InlineCode>, and <InlineCode>canceled</InlineCode>.
         </p>
       </div>
