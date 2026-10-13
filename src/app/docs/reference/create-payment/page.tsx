@@ -105,7 +105,7 @@ export default function CreatePaymentReferencePage() {
           <Link href="/docs/reference/payment" className="font-medium text-accent hover:underline">
             Payment
           </Link>
-          . Prefer webhooks for terminal status in live mode — create may return{" "}
+          . Prefer webhooks for terminal status in live mode. Create may return{" "}
           <InlineCode>pending</InlineCode> / <InlineCode>processing</InlineCode>.
         </p>
       </div>
