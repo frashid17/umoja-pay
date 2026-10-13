@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
+import { countOf, q } from "@/lib/db";
+import type { KycSubmission, Merchant, Payment } from "@/lib/types";
+import { getSessionUser, isPlatformAdmin } from "@/lib/session";
 
 const countryLabels: Record<string, string> = {
   KE: "Kenya",
@@ -17,48 +18,39 @@ export default async function AdminHomePage() {
   if (!user) redirect("/sign-in");
   if (!(await isPlatformAdmin(user.id, user.email))) redirect("/dashboard");
 
-  const supabase = createServiceClient();
   const [
-    { count: merchantCount },
-    { count: pendingKyc },
-    { count: activeMerchants },
-    { count: paymentCount },
-    { count: succeededPayments },
-    { count: failedPayments },
-    { data: recentMerchants },
-    { data: pendingSubs },
-    { data: recentPayments },
+    merchantCount,
+    pendingKyc,
+    activeMerchants,
+    paymentCount,
+    succeededPayments,
+    failedPayments,
+    recentMerchants,
+    pendingSubs,
+    recentPayments,
   ] = await Promise.all([
-    supabase.from("merchants").select("*", { count: "exact", head: true }),
-    supabase
-      .from("kyc_submissions")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending"),
-    supabase
-      .from("merchants")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "active"),
-    supabase.from("payments").select("*", { count: "exact", head: true }),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "succeeded"),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "failed"),
-    supabase.from("merchants").select("*").order("created_at", { ascending: false }).limit(6),
-    supabase
-      .from("kyc_submissions")
-      .select("*, merchants(name, country)")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(5),
-    supabase
-      .from("payments")
-      .select("*, merchants(name)")
-      .order("created_at", { ascending: false })
-      .limit(8),
+    countOf`select count(*)::int as count from merchants`,
+    countOf`select count(*)::int as count from kyc_submissions where status = 'pending'`,
+    countOf`select count(*)::int as count from merchants where status = 'active'`,
+    countOf`select count(*)::int as count from payments`,
+    countOf`select count(*)::int as count from payments where status = 'succeeded'`,
+    countOf`select count(*)::int as count from payments where status = 'failed'`,
+    q<Merchant>`select * from merchants order by created_at desc limit 6`,
+    q<KycSubmission & { merchants: { name: string; country: string } }>`
+      select s.*, json_build_object('name', m.name, 'country', m.country) as merchants
+      from kyc_submissions s
+      join merchants m on m.id = s.merchant_id
+      where s.status = 'pending'
+      order by s.created_at asc
+      limit 5
+    `,
+    q<Payment & { merchants: { name: string } | null }>`
+      select p.*, json_build_object('name', m.name) as merchants
+      from payments p
+      join merchants m on m.id = p.merchant_id
+      order by p.created_at desc
+      limit 8
+    `,
   ]);
 
   const successRate =
@@ -115,7 +107,7 @@ export default async function AdminHomePage() {
                 Success rate
               </p>
               <p className="font-display mt-1.5 text-2xl font-bold text-foreground sm:mt-2 sm:text-3xl">
-                {successRate === null ? "—" : `${successRate}%`}
+                {successRate === null ? "-" : `${successRate}%`}
               </p>
               <p className="mt-1 text-xs text-muted">Sandbox included</p>
             </div>
