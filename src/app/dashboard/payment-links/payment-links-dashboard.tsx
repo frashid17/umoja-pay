@@ -7,7 +7,7 @@ import {
   createPaymentLinkAction,
 } from "@/app/dashboard/payment-links/actions";
 import { PaymentLinkShareCard } from "@/components/payment-links/share-card";
-import { formatLinkMoney } from "@/lib/payment-links";
+import { formatLinkMoney } from "@/lib/payment-links/format";
 import type { Merchant, PaymentLink } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 
