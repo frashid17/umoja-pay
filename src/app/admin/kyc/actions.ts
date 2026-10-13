@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
-import { getSessionUser, isPlatformAdmin } from "@/lib/auth/session";
+import { getSessionUser, isPlatformAdmin } from "@/lib/session";
+import { one, q } from "@/lib/db";
+import type { KycSubmission } from "@/lib/types";
 
 export async function reviewKycAction(formData: FormData) {
   const user = await getSessionUser();
@@ -19,32 +20,26 @@ export async function reviewKycAction(formData: FormData) {
     throw new Error("Invalid decision");
   }
 
-  const supabase = createServiceClient();
-  const { data: submission, error } = await supabase
-    .from("kyc_submissions")
-    .select("*")
-    .eq("id", submissionId)
-    .single();
+  const submission = one(
+    await q<KycSubmission>`select * from kyc_submissions where id = ${submissionId}`,
+  );
+  if (!submission) throw new Error("Submission not found");
 
-  if (error || !submission) throw new Error("Submission not found");
+  await q`
+    update kyc_submissions
+    set status = ${decision}::kyc_status,
+        review_notes = ${notes || null},
+        reviewed_by = ${user.id},
+        reviewed_at = now()
+    where id = ${submissionId}
+  `;
 
-  await supabase
-    .from("kyc_submissions")
-    .update({
-      status: decision,
-      review_notes: notes || null,
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-    })
-    .eq("id", submissionId);
-
-  await supabase
-    .from("merchants")
-    .update({
-      status: decision === "approved" ? "active" : "rejected",
-      legal_name: submission.legal_name,
-    })
-    .eq("id", submission.merchant_id);
+  await q`
+    update merchants
+    set status = ${decision === "approved" ? "active" : "rejected"}::merchant_status,
+        legal_name = ${submission.legal_name}
+    where id = ${submission.merchant_id}
+  `;
 
   await writeAuditLog({
     merchantId: submission.merchant_id,
