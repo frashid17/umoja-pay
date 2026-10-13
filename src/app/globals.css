@@ -19,7 +19,7 @@
   --signal: #f0a202;
   --surface-elevated: #ffffff;
   --ring: #0d6e56;
-  /* Logo mark — deep green reads on light surfaces */
+  /* Logo mark - deep green reads on light surfaces */
   --brand-mark-deep: #0b3d32;
   --brand-mark-mint: #2db887;
   --brand-mark-signal: #f0a202;
@@ -42,7 +42,7 @@
   --signal: #f0a202;
   --surface-elevated: #121c17;
   --ring: #2db887;
-  /* Logo mark — light left figure so it doesn’t vanish on dark UI */
+  /* Logo mark - light left figure so it doesn’t vanish on dark UI */
   --brand-mark-deep: #e8f5f0;
   --brand-mark-mint: #2db887;
   --brand-mark-signal: #f0a202;
@@ -96,7 +96,7 @@ body {
     var(--background);
 }
 
-/* Hero plane — theme aware */
+/* Hero plane - theme aware */
 .bg-hero {
   background-color: var(--background);
   background-image:
