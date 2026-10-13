@@ -12,7 +12,7 @@ export default function AuthenticationPage() {
       <DocsPageHeader
         eyebrow="Start building"
         title="Authentication"
-        lead="Merchant API calls authenticate with a secret API key in the Authorization header. Dashboard sessions use Clerk — never mix the two."
+        lead="Merchant API calls authenticate with a secret API key in the Authorization header. Dashboard sessions use signed-in cookies. Never mix the two."
       />
 
       <div className="space-y-4 text-[15px] leading-relaxed text-muted">
@@ -34,7 +34,7 @@ export default function AuthenticationPage() {
         <h2 className="font-display pt-4 text-2xl font-bold text-foreground">Key rules</h2>
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            Send keys only from your <strong className="text-foreground">server</strong> — never
+            Send keys only from your <strong className="text-foreground">server</strong>, never
             embed them in mobile apps or browser JS.
           </li>
           <li>
@@ -55,7 +55,7 @@ export default function AuthenticationPage() {
           rows={[
             ["401", "Missing, malformed, or unknown API key"],
             ["403", "Valid key but mode/KYC not allowed for this action"],
-            ["429", "Rate limited — back off and retry"],
+            ["429", "Rate limited. Back off and retry"],
           ]}
         />
 
@@ -63,9 +63,9 @@ export default function AuthenticationPage() {
           Dashboard vs API
         </h2>
         <p>
-          Signing in to <InlineCode>/dashboard</InlineCode> uses Clerk cookies/sessions. The public
-          payment API does <strong className="text-foreground">not</strong> accept Clerk JWTs —
-          only API keys.
+          Signing in to <InlineCode>/dashboard</InlineCode> uses platform session cookies. The
+          public payment API does <strong className="text-foreground">not</strong> accept session
+          cookies, only API keys.
         </p>
       </div>
 
