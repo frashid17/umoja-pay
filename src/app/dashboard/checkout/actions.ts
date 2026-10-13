@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
-import { getSessionUser, getUserMerchant, isPlatformAdmin } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant, isPlatformAdmin } from "@/lib/session";
 import { getAppOrigin } from "@/lib/app-url";
 import { createCheckoutSession } from "@/lib/checkout/sessions";
+import { dbMessage, q } from "@/lib/db";
+import { deleteObject, putObject } from "@/lib/storage";
 import type { CurrencyCode } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 
@@ -44,28 +45,37 @@ export async function uploadMerchantLogoAction(
           : "jpg";
 
   const path = `${ctx.merchant.id}/logo.${ext}`;
-  const supabase = createServiceClient();
 
-  if (ctx.merchant.logo_path && ctx.merchant.logo_path !== path) {
-    await supabase.storage.from("merchant-logos").remove([ctx.merchant.logo_path]);
+  try {
+    if (ctx.merchant.logo_path && ctx.merchant.logo_path !== path) {
+      await deleteObject("merchant-logos", ctx.merchant.logo_path);
+    }
+    await putObject({
+      bucket: "merchant-logos",
+      path,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      contentType: file.type,
+    });
+  } catch (error) {
+    return { error: dbMessage(error) };
   }
 
-  const { error: uploadError } = await supabase.storage.from("merchant-logos").upload(path, file, {
-    upsert: true,
-    contentType: file.type,
-  });
-  if (uploadError) return { error: uploadError.message };
-
   const accent = clean(formData.get("brandAccent"));
-  const { error } = await supabase
-    .from("merchants")
-    .update({
-      logo_path: path,
-      ...(accent !== null ? { brand_accent: accent } : {}),
-    })
-    .eq("id", ctx.merchant.id);
-
-  if (error) return { error: error.message };
+  try {
+    if (accent !== null) {
+      await q`
+        update merchants
+        set logo_path = ${path}, brand_accent = ${accent}
+        where id = ${ctx.merchant.id}
+      `;
+    } else {
+      await q`
+        update merchants set logo_path = ${path} where id = ${ctx.merchant.id}
+      `;
+    }
+  } catch (error) {
+    return { error: dbMessage(error) };
+  }
 
   await writeAuditLog({
     merchantId: ctx.merchant.id,
@@ -90,13 +100,13 @@ export async function updateCheckoutBrandAction(
   if (!ctx) return { error: "No merchant" };
 
   const accent = clean(formData.get("brandAccent"));
-  const supabase = createServiceClient();
-  const { error } = await supabase
-    .from("merchants")
-    .update({ brand_accent: accent })
-    .eq("id", ctx.merchant.id);
-
-  if (error) return { error: error.message };
+  try {
+    await q`
+      update merchants set brand_accent = ${accent} where id = ${ctx.merchant.id}
+    `;
+  } catch (error) {
+    return { error: dbMessage(error) };
+  }
 
   revalidatePath("/dashboard/checkout");
   return { ok: true };
