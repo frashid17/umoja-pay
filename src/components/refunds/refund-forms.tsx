@@ -44,7 +44,7 @@ export function CreateRefundForm({
             setMsg(res.error);
             return;
           }
-          setMsg("Refund submitted — settled to the original payment method");
+          setMsg("Refund submitted. Settled to the original payment method");
           router.refresh();
         });
       }}
