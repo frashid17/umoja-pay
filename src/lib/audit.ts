@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/supabase/admin";
+import { q } from "@/lib/db";
 
 export async function writeAuditLog(input: {
   merchantId?: string | null;
@@ -9,14 +9,18 @@ export async function writeAuditLog(input: {
   metadata?: Record<string, unknown>;
   ip?: string | null;
 }) {
-  const supabase = createServiceClient();
-  await supabase.from("audit_logs").insert({
-    merchant_id: input.merchantId ?? null,
-    actor_user_id: input.actorUserId ?? null,
-    action: input.action,
-    entity_type: input.entityType,
-    entity_id: input.entityId ?? null,
-    metadata: input.metadata ?? {},
-    ip: input.ip ?? null,
-  });
+  await q`
+    insert into audit_logs (
+      merchant_id, actor_user_id, action, entity_type, entity_id, metadata, ip
+    )
+    values (
+      ${input.merchantId ?? null},
+      ${input.actorUserId ?? null},
+      ${input.action},
+      ${input.entityType},
+      ${input.entityId ?? null},
+      ${JSON.stringify(input.metadata ?? {})}::jsonb,
+      ${input.ip ?? null}
+    )
+  `;
 }
