@@ -23,7 +23,7 @@ export default function HowToStartPage() {
             <Link href="/sign-up" className="font-medium text-accent hover:underline">
               Sign up
             </Link>{" "}
-            with Clerk.
+            on the platform.
           </li>
           <li>Complete onboarding (business name + country).</li>
           <li>
@@ -70,7 +70,7 @@ export default function HowToStartPage() {
         </h2>
         <p>
           In <InlineCode>/dashboard/keys</InlineCode>, create a{" "}
-          <InlineCode>uk_test_…</InlineCode> secret. Copy it immediately — it is shown once and
+          <InlineCode>uk_test_…</InlineCode> secret. Copy it immediately. It is shown once and
           stored hashed.
         </p>
 
