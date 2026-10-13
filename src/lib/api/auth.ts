@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/admin";
 import {
   hashSecret,
   modeFromSecret,
   parseBearerToken,
   secretsEqual,
 } from "@/lib/api-keys";
+import { one, q } from "@/lib/db";
 import type { ApiKey, ApiKeyMode, Merchant } from "@/lib/types";
 
 export function apiError(status: number, code: string, message: string) {
@@ -33,14 +33,13 @@ export async function authenticateApiKey(
   }
 
   const prefix = token.slice(0, `uk_${mode}_`.length + 8);
-  const supabase = createServiceClient();
 
-  const { data: key } = await supabase
-    .from("api_keys")
-    .select("*")
-    .eq("prefix", prefix)
-    .is("revoked_at", null)
-    .maybeSingle();
+  const key = one(
+    await q<ApiKey>`
+      select * from api_keys
+      where prefix = ${prefix} and revoked_at is null
+    `,
+  );
 
   if (!key) {
     return apiError(401, "unauthorized", "Invalid API key");
@@ -51,11 +50,9 @@ export async function authenticateApiKey(
     return apiError(401, "unauthorized", "Invalid API key");
   }
 
-  const { data: merchant } = await supabase
-    .from("merchants")
-    .select("*")
-    .eq("id", key.merchant_id)
-    .maybeSingle();
+  const merchant = one(
+    await q<Merchant>`select * from merchants where id = ${key.merchant_id}`,
+  );
 
   if (!merchant) {
     return apiError(401, "unauthorized", "Merchant not found");
@@ -65,15 +62,14 @@ export async function authenticateApiKey(
     return apiError(403, "forbidden", "Live keys require an active merchant (KYC approved)");
   }
 
-  await supabase
-    .from("api_keys")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", key.id);
+  await q`
+    update api_keys set last_used_at = now() where id = ${key.id}
+  `;
 
   return {
-    merchant: merchant as Merchant,
-    apiKey: key as ApiKey,
-    mode: key.mode as ApiKeyMode,
+    merchant,
+    apiKey: key,
+    mode: key.mode,
     secret: token,
   };
 }
