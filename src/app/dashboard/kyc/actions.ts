@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
+import { dbMessage, one, q } from "@/lib/db";
+import { putObject } from "@/lib/storage";
+import type { KycSubmission } from "@/lib/types";
 
 export async function submitKyc(formData: FormData) {
   const user = await getSessionUser();
@@ -24,48 +26,63 @@ export async function submitKyc(formData: FormData) {
     throw new Error("Missing required KYC fields");
   }
 
-  const supabase = createServiceClient();
-
-  const { data: submission, error } = await supabase
-    .from("kyc_submissions")
-    .insert({
-      merchant_id: ctx.merchant.id,
-      legal_name: legalName,
-      registration_number: registrationNumber,
-      address_line: addressLine,
-      city,
-      country,
-      directors_summary: directorsSummary,
-      status: "pending",
-      submitted_by: user.id,
-    })
-    .select("*")
-    .single();
-
-  if (error || !submission) throw new Error(error?.message ?? "KYC submit failed");
+  let submission: KycSubmission;
+  try {
+    const row = one(
+      await q<KycSubmission>`
+        insert into kyc_submissions (
+          merchant_id, legal_name, registration_number, address_line, city, country,
+          directors_summary, status, submitted_by
+        )
+        values (
+          ${ctx.merchant.id},
+          ${legalName},
+          ${registrationNumber},
+          ${addressLine},
+          ${city},
+          ${country}::country_code,
+          ${directorsSummary},
+          'pending',
+          ${user.id}
+        )
+        returning *
+      `,
+    );
+    if (!row) throw new Error("KYC submit failed");
+    submission = row;
+  } catch (error) {
+    throw new Error(dbMessage(error));
+  }
 
   if (file instanceof File && file.size > 0) {
     const path = `${ctx.merchant.id}/${submission.id}/${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("kyc").upload(path, file, {
-      upsert: true,
+    await putObject({
+      bucket: "kyc",
+      path,
+      bytes: new Uint8Array(await file.arrayBuffer()),
       contentType: file.type || "application/octet-stream",
     });
-    if (uploadError) throw new Error(uploadError.message);
 
-    await supabase.from("kyc_documents").insert({
-      merchant_id: ctx.merchant.id,
-      submission_id: submission.id,
-      doc_type: "registration_certificate",
-      file_path: path,
-      file_name: file.name,
-      content_type: file.type || null,
-    });
+    await q`
+      insert into kyc_documents (
+        merchant_id, submission_id, doc_type, file_path, file_name, content_type
+      )
+      values (
+        ${ctx.merchant.id},
+        ${submission.id},
+        'registration_certificate',
+        ${path},
+        ${file.name},
+        ${file.type || null}
+      )
+    `;
   }
 
-  await supabase
-    .from("merchants")
-    .update({ status: "pending_kyc", legal_name: legalName })
-    .eq("id", ctx.merchant.id);
+  await q`
+    update merchants
+    set status = 'pending_kyc', legal_name = ${legalName}
+    where id = ${ctx.merchant.id}
+  `;
 
   await writeAuditLog({
     merchantId: ctx.merchant.id,
