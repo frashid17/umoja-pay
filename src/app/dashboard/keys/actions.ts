@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { generateApiKey } from "@/lib/api-keys";
 import { writeAuditLog } from "@/lib/audit";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
-import { createServiceClient } from "@/lib/supabase/admin";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
+import { dbMessage, one, q } from "@/lib/db";
 import type { ApiKeyMode } from "@/lib/types";
 
 export async function createApiKeyAction(
@@ -24,34 +24,38 @@ export async function createApiKeyAction(
   }
 
   const generated = generateApiKey(mode);
-  const supabase = createServiceClient();
 
-  const { data, error } = await supabase
-    .from("api_keys")
-    .insert({
-      merchant_id: ctx.merchant.id,
-      name,
-      prefix: generated.prefix,
-      secret_hash: generated.hash,
-      mode,
-      created_by: user.id,
-    })
-    .select("id")
-    .single();
+  try {
+    const data = one(
+      await q<{ id: string }>`
+        insert into api_keys (merchant_id, name, prefix, secret_hash, mode, created_by)
+        values (
+          ${ctx.merchant.id},
+          ${name},
+          ${generated.prefix},
+          ${generated.hash},
+          ${mode}::api_key_mode,
+          ${user.id}
+        )
+        returning id
+      `,
+    );
+    if (!data) return { error: "Failed to create key" };
 
-  if (error || !data) return { error: error?.message ?? "Failed to create key" };
+    await writeAuditLog({
+      merchantId: ctx.merchant.id,
+      actorUserId: user.id,
+      action: "api_key.created",
+      entityType: "api_key",
+      entityId: data.id,
+      metadata: { mode, name, prefix: generated.prefix },
+    });
 
-  await writeAuditLog({
-    merchantId: ctx.merchant.id,
-    actorUserId: user.id,
-    action: "api_key.created",
-    entityType: "api_key",
-    entityId: data.id,
-    metadata: { mode, name, prefix: generated.prefix },
-  });
-
-  revalidatePath("/dashboard/keys");
-  return { secret: generated.secret };
+    revalidatePath("/dashboard/keys");
+    return { secret: generated.secret };
+  } catch (error) {
+    return { error: dbMessage(error) };
+  }
 }
 
 export async function revokeApiKeyAction(formData: FormData) {
@@ -62,15 +66,16 @@ export async function revokeApiKeyAction(formData: FormData) {
   if (!ctx) throw new Error("No merchant");
 
   const keyId = String(formData.get("keyId") ?? "");
-  const supabase = createServiceClient();
 
-  const { error } = await supabase
-    .from("api_keys")
-    .update({ revoked_at: new Date().toISOString() })
-    .eq("id", keyId)
-    .eq("merchant_id", ctx.merchant.id);
-
-  if (error) throw new Error(error.message);
+  try {
+    await q`
+      update api_keys
+      set revoked_at = now()
+      where id = ${keyId} and merchant_id = ${ctx.merchant.id}
+    `;
+  } catch (error) {
+    throw new Error(dbMessage(error));
+  }
 
   await writeAuditLog({
     merchantId: ctx.merchant.id,
