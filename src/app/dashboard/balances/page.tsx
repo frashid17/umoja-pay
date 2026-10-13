@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { q } from "@/lib/db";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import { balancesFromPayments, formatMoney } from "@/lib/merchant-finance";
 import type { Payment, Refund, Settlement } from "@/lib/types";
 
@@ -12,25 +12,18 @@ export default async function BalancesPage() {
   const ctx = await getUserMerchant(user.id);
   if (!ctx) redirect("/onboarding");
 
-  const supabase = createServiceClient();
-  const [{ data: payments }, { data: settlements }, { data: refunds }] = await Promise.all([
-    supabase
-      .from("payments")
-      .select("amount, currency, status, mode")
-      .eq("merchant_id", ctx.merchant.id),
-    supabase
-      .from("settlements")
-      .select("amount, currency, status")
-      .eq("merchant_id", ctx.merchant.id),
-    supabase
-      .from("refunds")
-      .select("amount, currency, status, mode")
-      .eq("merchant_id", ctx.merchant.id),
+  const merchantId = ctx.merchant.id;
+  const [paymentRows, settlementRows, refundRows] = await Promise.all([
+    q<Pick<Payment, "amount" | "currency" | "status" | "mode">>`
+      select amount, currency, status, mode from payments where merchant_id = ${merchantId}
+    `,
+    q<Pick<Settlement, "amount" | "currency" | "status">>`
+      select amount, currency, status from settlements where merchant_id = ${merchantId}
+    `,
+    q<Pick<Refund, "amount" | "currency" | "status" | "mode">>`
+      select amount, currency, status, mode from refunds where merchant_id = ${merchantId}
+    `,
   ]);
-
-  const paymentRows = (payments ?? []) as Pick<Payment, "amount" | "currency" | "status" | "mode">[];
-  const settlementRows = (settlements ?? []) as Pick<Settlement, "amount" | "currency" | "status">[];
-  const refundRows = (refunds ?? []) as Pick<Refund, "amount" | "currency" | "status" | "mode">[];
 
   const live = balancesFromPayments(paymentRows, settlementRows, "live", refundRows);
   const test = balancesFromPayments(paymentRows, settlementRows, "test", refundRows);
