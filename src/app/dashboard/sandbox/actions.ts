@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import { createPayment } from "@/lib/payments/service";
 import { serializePayment } from "@/lib/payments/adapter";
 import { writeAuditLog } from "@/lib/audit";
