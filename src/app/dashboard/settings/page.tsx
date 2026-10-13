@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { SettingsForms } from "@/app/dashboard/settings/settings-forms";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { one, q } from "@/lib/db";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import type { SettlementAccount } from "@/lib/types";
 
 export default async function SettingsPage() {
@@ -12,12 +12,11 @@ export default async function SettingsPage() {
   const ctx = await getUserMerchant(user.id);
   if (!ctx) redirect("/onboarding");
 
-  const supabase = createServiceClient();
-  const { data: account } = await supabase
-    .from("settlement_accounts")
-    .select("*")
-    .eq("merchant_id", ctx.merchant.id)
-    .maybeSingle();
+  const account = one(
+    await q<SettlementAccount>`
+      select * from settlement_accounts where merchant_id = ${ctx.merchant.id}
+    `,
+  );
 
   return (
     <AppShell
@@ -40,7 +39,7 @@ export default async function SettingsPage() {
           support_phone: ctx.merchant.support_phone ?? null,
           statement_email: ctx.merchant.statement_email ?? null,
         }}
-        account={(account as SettlementAccount | null) ?? null}
+        account={account}
         role={ctx.membership.role}
         userEmail={user.email}
       />
