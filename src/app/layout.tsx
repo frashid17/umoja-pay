@@ -1,4 +1,3 @@
-import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, Syne } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -17,24 +16,16 @@ const syne = Syne({
 });
 
 export const metadata: Metadata = {
-  title: "Umoja Pay — Payments for East Africa",
+  title: "Umoja Pay: Payments for East Africa",
   description:
-    "Accept M-Pesa, cards, and East African payments with Umoja Pay. Hosted checkout, KYC, and sandbox API keys.",
+    "Accept M-Pesa and East African payments. Integrate once, onboard with KYC, and ship with sandbox API keys.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${plex.variable} ${syne.variable} antialiased`}>
-        <ClerkProvider
-          signInUrl="/sign-in"
-          signUpUrl="/sign-up"
-          signInFallbackRedirectUrl="/dashboard"
-          signUpFallbackRedirectUrl="/onboarding"
-          afterSignOutUrl="/"
-        >
-          <ThemeProvider>{children}</ThemeProvider>
-        </ClerkProvider>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
