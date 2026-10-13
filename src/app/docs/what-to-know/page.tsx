@@ -18,7 +18,7 @@ export default function WhatToKnowPage() {
       <div className="space-y-4 text-[15px] leading-relaxed text-muted">
         <h2 className="font-display text-2xl font-bold text-foreground">Treat payments as async</h2>
         <p>
-          A successful HTTP create means Umoja Pay accepted the request — not that the customer paid.
+          A successful HTTP create means Umoja Pay accepted the request, not that the customer paid.
           Always wait for <InlineCode>succeeded</InlineCode> or <InlineCode>failed</InlineCode> via
           webhook, or poll <InlineCode>GET /api/v1/payments/:id</InlineCode>.
         </p>
@@ -54,7 +54,7 @@ export default function WhatToKnowPage() {
         />
         <p>
           Always send integers. Currency decimals are fixed at 2 for MVP currencies in the API
-          contract — multiply major units by 100.
+          contract: multiply major units by 100.
         </p>
 
         <h2 className="font-display pt-4 text-2xl font-bold text-foreground">Phone numbers</h2>
@@ -79,7 +79,7 @@ export default function WhatToKnowPage() {
         <h2 className="font-display pt-4 text-2xl font-bold text-foreground">Customer UX</h2>
         <p>
           Show a clear “check your phone to approve” state after create. Handle decline, timeout, and
-          insufficient funds as normal failed outcomes — not application crashes.
+          insufficient funds as normal failed outcomes, not application crashes.
         </p>
       </div>
 
