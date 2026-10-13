@@ -4,8 +4,9 @@ import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { SandboxConsole } from "@/app/dashboard/sandbox/sandbox-console";
 import { getAppOrigin } from "@/lib/app-url";
-import { createServiceClient } from "@/lib/supabase/admin";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { q } from "@/lib/db";
+import type { Payment } from "@/lib/types";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 
 export default async function SandboxPage() {
   const user = await getSessionUser();
@@ -13,14 +14,12 @@ export default async function SandboxPage() {
   const ctx = await getUserMerchant(user.id);
   if (!ctx) redirect("/onboarding");
 
-  const supabase = createServiceClient();
-  const { data: recent } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("merchant_id", ctx.merchant.id)
-    .eq("mode", "test")
-    .order("created_at", { ascending: false })
-    .limit(8);
+  const recent = await q<Payment>`
+    select * from payments
+    where merchant_id = ${ctx.merchant.id} and mode = 'test'
+    order by created_at desc
+    limit 8
+  `;
 
   const appUrl = await getAppOrigin();
 
@@ -77,7 +76,7 @@ export default async function SandboxPage() {
                 <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs">
                   <div className="min-w-0">
                     <dt className="text-muted">Reference</dt>
-                    <dd className="mt-0.5 truncate text-foreground">{p.reference ?? "—"}</dd>
+                    <dd className="mt-0.5 truncate text-foreground">{p.reference ?? "-"}</dd>
                   </div>
                   <div className="min-w-0">
                     <dt className="text-muted">When</dt>
