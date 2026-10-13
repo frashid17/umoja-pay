@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
-import { useSignIn } from "@clerk/nextjs";
+import { useActionState, useState, useTransition } from "react";
+import { signInWithEmail, type AuthFormState } from "@/app/auth/actions";
+import { authClient } from "@/lib/auth/client";
 
 function GoogleIcon() {
   return (
@@ -29,61 +29,27 @@ function GoogleIcon() {
 }
 
 export function SignInForm() {
-  const { signIn, errors, fetchStatus } = useSignIn();
-  const router = useRouter();
+  const [state, formAction, pending] = useActionState<AuthFormState, FormData>(
+    signInWithEmail,
+    null,
+  );
   const [showPassword, setShowPassword] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const [oauthPending, startOauth] = useTransition();
 
-  async function finalize() {
-    await signIn.finalize({
-      navigate: async ({ session, decorateUrl }) => {
-        const destination = session?.currentTask ? "/dashboard" : "/dashboard";
-        const url = decorateUrl(destination);
-        if (url.startsWith("http")) window.location.href = url;
-        else router.push(url);
-      },
+  function onGoogle() {
+    setOauthError(null);
+    startOauth(async () => {
+      const { error } = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/dashboard",
+      });
+      if (error) setOauthError(error.message ?? "Google sign-in failed");
     });
   }
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLocalError(null);
-    const form = new FormData(e.currentTarget);
-    const emailAddress = String(form.get("email") ?? "");
-    const password = String(form.get("password") ?? "");
-
-    const { error } = await signIn.password({ emailAddress, password });
-    if (error) {
-      setLocalError(error.message ?? "Could not sign in");
-      return;
-    }
-
-    if (signIn.status === "complete") {
-      await finalize();
-      return;
-    }
-
-    if (signIn.status === "needs_second_factor" || signIn.status === "needs_client_trust") {
-      setLocalError("Additional verification is required. Enable MFA handling or try again from the Clerk dashboard settings.");
-    }
-  }
-
-  async function onGoogle() {
-    setLocalError(null);
-    const { error } = await signIn.sso({
-      strategy: "oauth_google",
-      redirectUrl: "/dashboard",
-      redirectCallbackUrl: "/sso-callback",
-    });
-    if (error) setLocalError(error.message ?? "Google sign-in failed");
-  }
-
-  const busy = fetchStatus === "fetching";
-  const fieldError =
-    errors.fields.identifier?.message ||
-    errors.fields.password?.message ||
-    errors.global?.[0]?.message ||
-    localError;
+  const busy = pending || oauthPending;
+  const fieldError = state?.error || oauthError;
 
   return (
     <div className="space-y-5">
@@ -102,7 +68,7 @@ export function SignInForm() {
         <span className="relative bg-atmosphere px-3">or</span>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form action={formAction} className="space-y-4">
         <label className="block space-y-1.5 text-sm">
           <span className="font-medium text-foreground">Email address</span>
           <input
@@ -117,9 +83,6 @@ export function SignInForm() {
         <label className="block space-y-1.5 text-sm">
           <span className="flex items-center justify-between font-medium text-foreground">
             Password
-            <Link href="/sign-in#forgot" className="text-xs font-normal text-accent hover:underline">
-              Forgot password?
-            </Link>
           </span>
           <div className="relative">
             <input
@@ -147,8 +110,8 @@ export function SignInForm() {
           disabled={busy}
           className="flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition hover:opacity-90 disabled:opacity-60"
         >
-          {busy ? "Signing in…" : "Continue"}
-          {!busy ? (
+          {pending ? "Signing in…" : "Continue"}
+          {!pending ? (
             <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
               <path
                 d="M3 8h10M9 4l4 4-4 4"
