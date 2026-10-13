@@ -42,7 +42,7 @@ export function PaymentLinksDashboard({
       <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
         <h2 className="font-display text-xl font-bold text-foreground">Create payment link</h2>
         <p className="mt-1 text-sm text-muted">
-          Name the product, set the price, optionally add an image — then share a QR code or
+          Name the product, set the price, optionally add an image, then share a QR code or
           downloadable flyer.
         </p>
 
@@ -102,9 +102,9 @@ export function PaymentLinksDashboard({
           <label className="block space-y-1.5 text-sm sm:col-span-2">
             <span className="text-foreground">Mode</span>
             <select name="mode" defaultValue="test" className={inputClass}>
-              <option value="test">Test — sandbox payments, no live money</option>
+              <option value="test">Test: sandbox payments, no live money</option>
               <option value="live" disabled={merchant.status !== "active"}>
-                Live — real charges
+                Live: real charges
                 {merchant.status !== "active" ? " (requires active KYC)" : ""}
               </option>
             </select>
@@ -175,8 +175,8 @@ export function PaymentLinksDashboard({
                 Mode:{" "}
                 <span className="font-medium capitalize text-foreground">{selected.mode}</span>
                 {selected.mode === "test"
-                  ? " — sandbox only"
-                  : " — live charges"}
+                  ? " (sandbox only)"
+                  : " (live charges)"}
               </p>
               <PaymentLinkShareCard
                 payUrl={selected.payUrl || `${appOrigin}/pay/${selected.slug}?checkout=1`}
