@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createServiceClient } from "@/lib/supabase/admin";
 import { writeAuditLog } from "@/lib/audit";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
+import { dbMessage, one, q } from "@/lib/db";
 import type { CountryCode, CurrencyCode } from "@/lib/types";
 import { COUNTRIES, CURRENCIES } from "@/lib/types";
 
@@ -35,21 +35,21 @@ export async function updateBusinessProfileAction(
     return { error: "Invalid country" };
   }
 
-  const supabase = createServiceClient();
-  const { error } = await supabase
-    .from("merchants")
-    .update({
-      name,
-      legal_name: legalName,
-      website,
-      support_email: supportEmail,
-      support_phone: supportPhone,
-      statement_email: statementEmail,
-      country,
-    })
-    .eq("id", ctx.merchant.id);
-
-  if (error) return { error: error.message };
+  try {
+    await q`
+      update merchants
+      set name = ${name},
+          legal_name = ${legalName},
+          website = ${website},
+          support_email = ${supportEmail},
+          support_phone = ${supportPhone},
+          statement_email = ${statementEmail},
+          country = ${country}::country_code
+      where id = ${ctx.merchant.id}
+    `;
+  } catch (error) {
+    return { error: dbMessage(error) };
+  }
 
   await writeAuditLog({
     merchantId: ctx.merchant.id,
@@ -88,29 +88,46 @@ export async function saveSettlementAccountAction(
   if (!CURRENCIES.includes(currency)) return { error: "Invalid currency" };
   if (!COUNTRIES.some((c) => c.code === country)) return { error: "Invalid country" };
 
-  const supabase = createServiceClient();
-  const { data: existing } = await supabase
-    .from("settlement_accounts")
-    .select("id")
-    .eq("merchant_id", ctx.merchant.id)
-    .maybeSingle();
+  const existing = one(
+    await q<{ id: string }>`
+      select id from settlement_accounts where merchant_id = ${ctx.merchant.id}
+    `,
+  );
 
-  const payload = {
-    merchant_id: ctx.merchant.id,
-    account_name: accountName,
-    bank_name: bankName,
-    account_number: accountNumber,
-    branch_code: branchCode,
-    mobile_money_phone: mobileMoneyPhone,
-    currency,
-    country,
-  };
-
-  const { error } = existing
-    ? await supabase.from("settlement_accounts").update(payload).eq("id", existing.id)
-    : await supabase.from("settlement_accounts").insert(payload);
-
-  if (error) return { error: error.message };
+  try {
+    if (existing) {
+      await q`
+        update settlement_accounts
+        set account_name = ${accountName},
+            bank_name = ${bankName},
+            account_number = ${accountNumber},
+            branch_code = ${branchCode},
+            mobile_money_phone = ${mobileMoneyPhone},
+            currency = ${currency}::currency_code,
+            country = ${country}::country_code
+        where id = ${existing.id}
+      `;
+    } else {
+      await q`
+        insert into settlement_accounts (
+          merchant_id, account_name, bank_name, account_number, branch_code,
+          mobile_money_phone, currency, country
+        )
+        values (
+          ${ctx.merchant.id},
+          ${accountName},
+          ${bankName},
+          ${accountNumber},
+          ${branchCode},
+          ${mobileMoneyPhone},
+          ${currency}::currency_code,
+          ${country}::country_code
+        )
+      `;
+    }
+  } catch (error) {
+    return { error: dbMessage(error) };
+  }
 
   await writeAuditLog({
     merchantId: ctx.merchant.id,
