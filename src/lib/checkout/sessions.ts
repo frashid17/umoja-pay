@@ -1,10 +1,6 @@
-import { createServiceClient } from "@/lib/supabase/admin";
-import type {
-  ApiKeyMode,
-  CheckoutSession,
-  CurrencyCode,
-  Merchant,
-} from "@/lib/types";
+import { dbMessage, one, q } from "@/lib/db";
+import { publicObjectUrl } from "@/lib/storage";
+import type { ApiKeyMode, CheckoutSession, CurrencyCode, Merchant } from "@/lib/types";
 
 export type CreateCheckoutSessionInput = {
   merchantId: string;
@@ -21,104 +17,110 @@ export type CreateCheckoutSessionInput = {
 };
 
 export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
-  const supabase = createServiceClient();
   const expiresIn = input.expiresInMinutes ?? 30;
   const expiresAt = new Date(Date.now() + expiresIn * 60_000).toISOString();
 
-  const { data, error } = await supabase
-    .from("checkout_sessions")
-    .insert({
-      merchant_id: input.merchantId,
-      amount: input.amount,
-      currency: input.currency,
-      description: input.description ?? null,
-      reference: input.reference ?? null,
-      mode: input.mode ?? "test",
-      is_preview: input.isPreview ?? false,
-      success_url: input.successUrl ?? null,
-      cancel_url: input.cancelUrl ?? null,
-      metadata: input.metadata ?? {},
-      expires_at: expiresAt,
-      status: "open",
-    })
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return data as CheckoutSession;
+  try {
+    const row = one(
+      await q<CheckoutSession>`
+        insert into checkout_sessions (
+          merchant_id, amount, currency, description, reference, mode, is_preview,
+          success_url, cancel_url, metadata, expires_at, status
+        )
+        values (
+          ${input.merchantId},
+          ${input.amount},
+          ${input.currency}::currency_code,
+          ${input.description ?? null},
+          ${input.reference ?? null},
+          ${input.mode ?? "test"}::api_key_mode,
+          ${input.isPreview ?? false},
+          ${input.successUrl ?? null},
+          ${input.cancelUrl ?? null},
+          ${JSON.stringify(input.metadata ?? {})}::jsonb,
+          ${expiresAt}::timestamptz,
+          'open'
+        )
+        returning *
+      `,
+    );
+    if (!row) throw new Error("Could not create checkout session");
+    return row;
+  } catch (error) {
+    throw error instanceof Error ? error : new Error(dbMessage(error));
+  }
 }
 
 export async function getCheckoutSession(sessionId: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("checkout_sessions")
-    .select("*")
-    .eq("id", sessionId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as CheckoutSession | null;
+  return one(
+    await q<CheckoutSession>`select * from checkout_sessions where id = ${sessionId}`,
+  );
 }
 
 export async function getMerchantForCheckout(merchantId: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("merchants")
-    .select("id, name, logo_path, brand_accent, support_email, website, country, status")
-    .eq("id", merchantId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as Pick<
-    Merchant,
-    | "id"
-    | "name"
-    | "logo_path"
-    | "brand_accent"
-    | "support_email"
-    | "website"
-    | "country"
-    | "status"
-  > | null;
+  return one(
+    await q<
+      Pick<
+        Merchant,
+        | "id"
+        | "name"
+        | "logo_path"
+        | "brand_accent"
+        | "support_email"
+        | "website"
+        | "country"
+        | "status"
+      >
+    >`
+      select id, name, logo_path, brand_accent, support_email, website, country, status
+      from merchants
+      where id = ${merchantId}
+    `,
+  );
 }
 
 export function merchantLogoPublicUrl(logoPath: string | null | undefined) {
-  if (!logoPath) return null;
-  const supabase = createServiceClient();
-  const { data } = supabase.storage.from("merchant-logos").getPublicUrl(logoPath);
-  return data.publicUrl;
+  return publicObjectUrl("merchant-logos", logoPath);
 }
 
 export async function markCheckoutCompleted(sessionId: string, paymentId: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("checkout_sessions")
-    .update({
-      status: "completed",
-      payment_id: paymentId,
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", sessionId)
-    .eq("status", "open")
-    .select("*")
-    .single();
+  const row = one(
+    await q<CheckoutSession>`
+      update checkout_sessions
+      set status = 'completed',
+          payment_id = ${paymentId},
+          completed_at = now()
+      where id = ${sessionId} and status = 'open'
+      returning *
+    `,
+  );
+  if (!row) throw new Error("Checkout session is no longer open");
 
-  if (error) throw error;
-  return data as CheckoutSession;
+  const invoiceId =
+    typeof row.metadata?.invoice_id === "string" ? row.metadata.invoice_id : null;
+  if (invoiceId) {
+    const { markInvoicePaid } = await import("@/lib/invoices");
+    await markInvoicePaid({
+      invoiceId,
+      merchantId: row.merchant_id,
+      paymentId,
+    }).catch(() => null);
+  }
+
+  return row;
 }
 
 export async function expireOpenSessionIfNeeded(session: CheckoutSession) {
   if (session.status !== "open") return session;
   if (new Date(session.expires_at).getTime() > Date.now()) return session;
 
-  const supabase = createServiceClient();
-  const { data } = await supabase
-    .from("checkout_sessions")
-    .update({ status: "expired" })
-    .eq("id", session.id)
-    .eq("status", "open")
-    .select("*")
-    .maybeSingle();
-
-  return (data as CheckoutSession | null) ?? { ...session, status: "expired" as const };
+  const row = one(
+    await q<CheckoutSession>`
+      update checkout_sessions
+      set status = 'expired'
+      where id = ${session.id} and status = 'open'
+      returning *
+    `,
+  );
+  return row ?? { ...session, status: "expired" as const };
 }
