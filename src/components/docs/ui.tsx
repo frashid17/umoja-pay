@@ -35,7 +35,7 @@ export function DocCard({
 export function SimpleTable({ headers, rows }: { headers: string[]; rows: string[][] }) {
   return (
     <div className="mt-5 rounded-xl border border-border">
-      {/* Mobile: stacked rows — no sideways scroll */}
+      {/* Mobile: stacked rows, no sideways scroll */}
       <ul className="divide-y divide-border sm:hidden">
         {rows.map((row) => (
           <li key={row.join("-")} className="space-y-2.5 px-4 py-3.5 text-sm">
