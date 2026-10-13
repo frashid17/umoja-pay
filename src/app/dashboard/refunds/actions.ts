@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSessionUser, getUserMerchant } from "@/lib/auth/session";
+import { getSessionUser, getUserMerchant } from "@/lib/session";
 import { cancelRefund, createRefund, updateRefund } from "@/lib/payments/refunds";
 
 function revalidateRefundPaths() {
