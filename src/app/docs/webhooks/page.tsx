@@ -21,7 +21,7 @@ export default function WebhooksPage() {
           <li>
             Open <InlineCode>/dashboard/webhooks</InlineCode> (or Webhooks in the merchant console).
           </li>
-          <li>Set a public HTTPS URL — use a tunnel such as ngrok for local development.</li>
+          <li>Set a public HTTPS URL. Use a tunnel such as ngrok for local development.</li>
           <li>
             Copy the signing secret (<InlineCode>whsec_…</InlineCode>) and store it server-side
             only.
@@ -98,7 +98,7 @@ function verify(secret, rawBody, header) {
         <h2 className="font-display pt-4 text-2xl font-bold text-foreground">Delivery rules</h2>
         <ul className="list-disc space-y-2 pl-5">
           <li>Return <InlineCode>2xx</InlineCode> quickly after you persist the event.</li>
-          <li>Handlers must be idempotent — the same event id may arrive more than once.</li>
+          <li>Handlers must be idempotent. The same event id may arrive more than once.</li>
           <li>MVP retries once on non-2xx or network error; durable queues come later.</li>
         </ul>
       </div>
