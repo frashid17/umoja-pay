@@ -1,4 +1,5 @@
-import { createServiceClient } from "@/lib/supabase/admin";
+import { isUniqueViolation, one, q } from "@/lib/db";
+import { publicObjectUrl } from "@/lib/storage";
 import type { ApiKeyMode, CurrencyCode, PaymentLink } from "@/lib/types";
 
 export type CreatePaymentLinkInput = {
@@ -22,89 +23,79 @@ function slugify(name: string) {
 }
 
 export async function createPaymentLink(input: CreatePaymentLinkInput) {
-  const supabase = createServiceClient();
   let slug = slugify(input.productName);
   for (let i = 0; i < 5; i++) {
-    const { data, error } = await supabase
-      .from("payment_links")
-      .insert({
-        merchant_id: input.merchantId,
-        slug,
-        product_name: input.productName,
-        description: input.description ?? null,
-        amount: input.amount,
-        currency: input.currency,
-        image_path: input.imagePath ?? null,
-        mode: input.mode ?? "test",
-        status: "active",
-      })
-      .select("*")
-      .single();
-
-    if (!error && data) return data as PaymentLink;
-    if (error?.code !== "23505") throw error;
+    try {
+      const row = one(
+        await q<PaymentLink>`
+          insert into payment_links (
+            merchant_id, slug, product_name, description, amount, currency,
+            image_path, mode, status
+          )
+          values (
+            ${input.merchantId},
+            ${slug},
+            ${input.productName},
+            ${input.description ?? null},
+            ${input.amount},
+            ${input.currency}::currency_code,
+            ${input.imagePath ?? null},
+            ${input.mode ?? "test"}::api_key_mode,
+            'active'
+          )
+          returning *
+        `,
+      );
+      if (row) return row;
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
     slug = slugify(input.productName);
   }
   throw new Error("Could not allocate a unique payment link slug");
 }
 
 export async function listPaymentLinks(merchantId: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("payment_links")
-    .select("*")
-    .eq("merchant_id", merchantId)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  return (data ?? []) as PaymentLink[];
+  return q<PaymentLink>`
+    select * from payment_links
+    where merchant_id = ${merchantId}
+    order by created_at desc
+  `;
 }
 
 export async function getPaymentLinkBySlug(slug: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("payment_links")
-    .select("*")
-    .eq("slug", slug)
-    .eq("status", "active")
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as PaymentLink | null;
+  return one(
+    await q<PaymentLink>`
+      select * from payment_links
+      where slug = ${slug} and status = 'active'
+    `,
+  );
 }
 
 export async function getPaymentLinkById(id: string, merchantId: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("payment_links")
-    .select("*")
-    .eq("id", id)
-    .eq("merchant_id", merchantId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as PaymentLink | null;
+  return one(
+    await q<PaymentLink>`
+      select * from payment_links
+      where id = ${id} and merchant_id = ${merchantId}
+    `,
+  );
 }
 
 export async function archivePaymentLink(id: string, merchantId: string) {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("payment_links")
-    .update({ status: "archived" })
-    .eq("id", id)
-    .eq("merchant_id", merchantId)
-    .select("*")
-    .single();
-
-  if (error) throw error;
-  return data as PaymentLink;
+  const row = one(
+    await q<PaymentLink>`
+      update payment_links
+      set status = 'archived'
+      where id = ${id} and merchant_id = ${merchantId}
+      returning *
+    `,
+  );
+  if (!row) throw new Error("Payment link not found");
+  return row;
 }
 
 export function paymentLinkImagePublicUrl(imagePath: string | null | undefined) {
-  if (!imagePath) return null;
-  const supabase = createServiceClient();
-  const { data } = supabase.storage.from("payment-link-images").getPublicUrl(imagePath);
-  return data.publicUrl;
+  return publicObjectUrl("payment-link-images", imagePath);
 }
 
 export function formatLinkMoney(amount: number, currency: CurrencyCode) {
