@@ -75,7 +75,7 @@ export default function PaymentsPage() {
 
         <h2 className="font-display pt-4 text-2xl font-bold text-foreground">List</h2>
         <p>
-          <InlineCode>GET /api/v1/payments</InlineCode> — returns recent payments for the
+          <InlineCode>GET /api/v1/payments</InlineCode>: returns recent payments for the
           authenticated merchant. Use retrieve + webhooks for order-critical confirmation.
         </p>
 
