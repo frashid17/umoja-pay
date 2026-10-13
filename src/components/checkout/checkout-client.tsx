@@ -422,7 +422,7 @@ export function CheckoutClient({ session, merchant, preview, paystackEnabled }: 
                     </label>
                   ) : paystackEnabled ? (
                     <p className="rounded-lg border border-border bg-sand/40 px-3 py-2.5 text-[12px] text-muted">
-                      Card details are entered securely on Paystack — we never see your full card
+                      Card details are entered securely on Paystack. We never see your full card
                       number.
                     </p>
                   ) : (
