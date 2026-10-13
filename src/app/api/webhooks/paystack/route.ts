@@ -1,7 +1,7 @@
+import { one, q } from "@/lib/db";
 import { applyProviderPaymentStatus } from "@/lib/payments/service";
-import { createServiceClient } from "@/lib/supabase/admin";
 import { verifyPaystackSignatureAny, paystackVerifyTransaction } from "@/lib/paystack/client";
-import type { ApiKeyMode, Refund } from "@/lib/types";
+import type { ApiKeyMode, Payment, Refund } from "@/lib/types";
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -68,7 +68,6 @@ async function handleRefundEvent(
   data: Record<string, unknown>,
   mode: ApiKeyMode,
 ) {
-  const supabase = createServiceClient();
   const refundId = data.id != null ? String(data.id) : null;
   const txRef =
     typeof data.transaction_reference === "string"
@@ -79,28 +78,25 @@ async function handleRefundEvent(
 
   let refund: Refund | null = null;
   if (refundId) {
-    const { data: byProvider } = await supabase
-      .from("refunds")
-      .select("*")
-      .eq("provider_ref", refundId)
-      .maybeSingle();
-    refund = byProvider as Refund | null;
+    refund = one(await q<Refund>`select * from refunds where provider_ref = ${refundId}`);
   }
 
   if (!refund && txRef) {
-    const { data: payment } = await supabase
-      .from("payments")
-      .select("id")
-      .or(`id.eq.${txRef},provider_ref.eq.${txRef}`)
-      .maybeSingle();
+    const payment = one(
+      await q<Pick<Payment, "id">>`
+        select id from payments
+        where id::text = ${txRef} or provider_ref = ${txRef}
+      `,
+    );
     if (payment) {
-      const { data: rows } = await supabase
-        .from("refunds")
-        .select("*")
-        .eq("payment_id", payment.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      refund = (rows?.[0] as Refund | undefined) ?? null;
+      refund = one(
+        await q<Refund>`
+          select * from refunds
+          where payment_id = ${payment.id}
+          order by created_at desc
+          limit 1
+        `,
+      );
     }
   }
 
@@ -115,14 +111,13 @@ async function handleRefundEvent(
           ? "processing"
           : refund.status;
 
-  await supabase
-    .from("refunds")
-    .update({
-      status,
-      ...(refundId ? { provider_ref: refundId } : {}),
-      failure_reason: type === "refund.failed" ? "Paystack refund failed" : null,
-    })
-    .eq("id", refund.id);
+  await q`
+    update refunds
+    set status = ${status}::refund_status,
+        provider_ref = coalesce(${refundId}, provider_ref),
+        failure_reason = ${type === "refund.failed" ? "Paystack refund failed" : null}
+    where id = ${refund.id}
+  `;
 
   // Re-verify transaction when useful (no-op if keys missing)
   if (txRef && type === "refund.processed") {
